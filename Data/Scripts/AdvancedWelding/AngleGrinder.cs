@@ -11,7 +11,7 @@ using VRage.ModAPI;
 
 namespace Digi.AdvancedWelding
 {
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder), true)]
     public class AngleGrinder : MyGameLogicComponent
     {
         public bool isYours = false;
@@ -32,11 +32,7 @@ namespace Digi.AdvancedWelding
             Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
-#if STABLE // HACK >>> STABLE condition
-        public static void SetToolStatus(string text, MyFontEnum font, int aliveTime = TOOLSTATUS_TIMEOUT)
-#else
         public static void SetToolStatus(string text, string font, int aliveTime = TOOLSTATUS_TIMEOUT)
-#endif
         {
             try
             {
@@ -140,7 +136,7 @@ namespace Digi.AdvancedWelding
                     return;
                 }
 
-                var blockName = (slimBlock.FatBlock == null ? slimBlock.ToString() : slimBlock.FatBlock.DefinitionDisplayNameText);
+                var blockName = ((MyCubeBlockDefinition)slimBlock.BlockDefinition).DisplayNameText;
                 var blockObj = slimBlock.GetObjectBuilder();
                 var defId = new MyDefinitionId(blockObj.TypeId, blockObj.SubtypeId);
                 MyCubeBlockDefinition blockDef;
@@ -162,43 +158,17 @@ namespace Digi.AdvancedWelding
                     return;
                 }
 
-                var gridObj = grid.GetObjectBuilder(false) as MyObjectBuilder_CubeGrid;
-                gridObj.DisplayName = "(Detached " + blockName + ")";
-                gridObj.IsStatic = false;
-                gridObj.ConveyorLines = null;
-
-                if(gridObj.BlockGroups != null)
-                    gridObj.BlockGroups.Clear();
-
-                MyObjectBuilder_CubeBlock existingBlockObj = null;
-
-                foreach(var block in gridObj.CubeBlocks)
-                {
-                    if(block.EntityId == blockObj.EntityId)
-                    {
-                        existingBlockObj = block;
-                    }
-                }
-
-                gridObj.CubeBlocks.Clear();
-
-                if(existingBlockObj != null)
-                {
-                    gridObj.CubeBlocks.Add(existingBlockObj);
-                }
-                else
-                {
-                    gridObj.CubeBlocks.Add(blockObj);
-                }
-
-                grid.RazeBlock(slimBlock.Position);
-
-                MyAPIGateway.Entities.RemapObjectBuilder(gridObj);
-                MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(gridObj);
-                MyAPIGateway.Multiplayer.SendEntitiesCreated(new List<MyObjectBuilder_EntityBase>(1) { gridObj });
-
                 SetToolStatus(blockName + " detached!\nDetach mode now off.", MyFontEnum.Green, 3000);
                 detach = false;
+
+                var bytes = new List<byte>();
+                bytes.AddRange(BitConverter.GetBytes(grid.EntityId));
+                bytes.AddRange(BitConverter.GetBytes(slimBlock.Position.X));
+                bytes.AddRange(BitConverter.GetBytes(slimBlock.Position.Y));
+                bytes.AddRange(BitConverter.GetBytes(slimBlock.Position.Z));
+                // TODO add 4th dimmension when compound blocks are a thing
+
+                MyAPIGateway.Multiplayer.SendMessageToServer(AdvancedWelding.PACKET, bytes.ToArray(), true);
             }
             catch(Exception e)
             {
@@ -226,11 +196,6 @@ namespace Digi.AdvancedWelding
             {
                 Log.Error(e);
             }
-        }
-
-        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
-        {
-            return Entity.GetObjectBuilder(copy);
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Sandbox.Definitions;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
@@ -26,6 +27,8 @@ namespace Digi.AdvancedWelding
 
         public static bool init { get; private set; }
 
+        public static readonly ushort PACKET = 9472;
+
         private static bool detachCancelNotified = false;
         public static List<IMyTerminalBlock> pads = new List<IMyTerminalBlock>();
         public static List<MergeGrids> mergeQueue = new List<MergeGrids>();
@@ -37,10 +40,11 @@ namespace Digi.AdvancedWelding
             AngleGrinder.notified = false;
             AngleGrinder.detach = false;
 
-            if(MyAPIGateway.Multiplayer.IsServer && MyAPIGateway.Utilities.IsDedicated)
-                return;
+            if(MyAPIGateway.Multiplayer.IsServer)
+                MyAPIGateway.Multiplayer.RegisterMessageHandler(PACKET, PacketReceived);
 
-            MyAPIGateway.Utilities.MessageEntered += MessageEntered;
+            if(!(MyAPIGateway.Multiplayer.IsServer && MyAPIGateway.Utilities.IsDedicated))
+                MyAPIGateway.Utilities.MessageEntered += MessageEntered;
         }
 
         protected override void UnloadData()
@@ -51,9 +55,11 @@ namespace Digi.AdvancedWelding
                 {
                     init = false;
                     MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
-                    pads.Clear();
-                    mergeQueue.Clear();
+                    MyAPIGateway.Multiplayer.UnregisterMessageHandler(PACKET, PacketReceived);
                 }
+
+                pads.Clear();
+                mergeQueue.Clear();
             }
             catch(Exception e)
             {
@@ -92,9 +98,7 @@ namespace Digi.AdvancedWelding
                         var newGrid = MergeGrids(merge.pad1, merge.pad2);
 
                         if(newGrid == null)
-                        {
                             newGrid = MergeGrids(merge.pad2, merge.pad1);
-                        }
 
                         Log.Info("merged to " + newGrid);
 
@@ -109,6 +113,89 @@ namespace Digi.AdvancedWelding
                     toRemove.Clear();
                     toRemove = null;
                 }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
+            }
+        }
+
+        private void PacketReceived(byte[] bytes)
+        {
+            try
+            {
+                int index = 0;
+                long gridId = BitConverter.ToInt64(bytes, index);
+                index += sizeof(long);
+
+                var slimPos = new Vector3I(
+                    BitConverter.ToInt32(bytes, index),
+                    BitConverter.ToInt32(bytes, index + sizeof(int)),
+                    BitConverter.ToInt32(bytes, index + sizeof(int) + sizeof(int)));
+                index += sizeof(int) * 3;
+
+                if(!MyAPIGateway.Entities.EntityExists(gridId))
+                {
+                    Log.Error("Can't find grid entity ID: " + gridId);
+                    return;
+                }
+
+                var grid = MyAPIGateway.Entities.GetEntityById(gridId) as IMyCubeGrid;
+
+                if(grid == null)
+                {
+                    Log.Error("Target entity is not a grid! gridId=" + gridId + "; ToString=" + grid.ToString());
+                    return;
+                }
+
+                var slimBlock = grid.GetCubeBlock(slimPos);
+
+                if(slimBlock == null)
+                {
+                    Log.Error("Target block does not exist in the grid; gridId=" + gridId + "; pos=" + slimPos);
+                    return;
+                }
+
+                var blockName = ((MyCubeBlockDefinition)slimBlock.BlockDefinition).DisplayNameText;
+                var blockObj = slimBlock.GetObjectBuilder();
+
+                var gridObj = grid.GetObjectBuilder(false) as MyObjectBuilder_CubeGrid;
+                gridObj.DisplayName = "(Detached " + blockName + ")";
+                gridObj.IsStatic = false;
+                gridObj.ConveyorLines = null;
+
+                if(gridObj.OxygenAmount != null && gridObj.OxygenAmount.Length > 0)
+                    gridObj.OxygenAmount = new float[0];
+
+                if(gridObj.BlockGroups != null)
+                    gridObj.BlockGroups.Clear();
+
+                var addBlockObj = blockObj;
+
+                foreach(var b in gridObj.CubeBlocks)
+                {
+                    if(b.EntityId == blockObj.EntityId)
+                    {
+                        addBlockObj = b;
+                        break;
+                    }
+                }
+
+                gridObj.CubeBlocks.Clear();
+                gridObj.CubeBlocks.Add(addBlockObj);
+
+                grid.RemoveBlock(slimBlock, true);
+
+                MyAPIGateway.Entities.RemapObjectBuilder(gridObj);
+                var ent = MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(gridObj);
+
+                if(ent == null)
+                {
+                    Log.Error("Failed to create a new grid! object=" + gridObj);
+                    return;
+                }
+
+                Log.Info("Detached " + blockName + ", new grid id=" + ent.EntityId);
             }
             catch(Exception e)
             {

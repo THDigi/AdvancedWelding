@@ -10,7 +10,7 @@ using VRage.ModAPI;
 
 namespace Digi.AdvancedWelding
 {
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TerminalBlock), "SmallWeldPad", "LargeWeldPad")]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TerminalBlock), true, "SmallWeldPad", "LargeWeldPad")]
     public class WeldPad : MyGameLogicComponent
     {
         private MyObjectBuilder_EntityBase objectBuilder;
@@ -43,12 +43,8 @@ namespace Digi.AdvancedWelding
                 Log.Error(e);
             }
         }
-
-#if STABLE // HACK >>> STABLE condition
-        public void SetToolStatus(string text, MyFontEnum font, int aliveTime = TOOLSTATUS_TIMEOUT)
-#else
+        
         public void SetToolStatus(string text, string font, int aliveTime = TOOLSTATUS_TIMEOUT)
-#endif
         {
             try
             {
@@ -304,11 +300,6 @@ namespace Digi.AdvancedWelding
             {
                 Log.Error(e);
             }
-        }
-
-        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
-        {
-            return copy ? (MyObjectBuilder_EntityBase)objectBuilder.Clone() : objectBuilder;
         }
     }
 }
