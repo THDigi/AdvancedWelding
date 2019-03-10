@@ -107,6 +107,11 @@
     <Compile Include="AdvancedWelding.cs" />
     <Compile Include="AngleGrinder.cs" />
     <Compile Include="Log.cs" />
+    <Compile Include="MergeGrids.cs" />
+    <Compile Include="MP\WeldEffectsPacket.cs" />
+    <Compile Include="MP\Networking.cs" />
+    <Compile Include="MP\PacketBase.cs" />
+    <Compile Include="MP\DetachPacket.cs" />
     <Compile Include="WeldPad.cs" />
   </ItemGroup>
   <ItemGroup>

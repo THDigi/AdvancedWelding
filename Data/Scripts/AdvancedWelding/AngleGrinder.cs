@@ -1,53 +1,59 @@
 ﻿using System;
-using System.Collections.Generic;
+using Digi.AdvancedWelding.MP;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
+using Sandbox.Game.Entities;
+using Sandbox.Game.EntityComponents;
+using Sandbox.Game.Weapons;
 using Sandbox.ModAPI;
 using VRage.Game;
-using VRage.Game.ModAPI;
-using VRage.ObjectBuilders;
 using VRage.Game.Components;
+using VRage.Game.ModAPI;
 using VRage.ModAPI;
+using VRage.ObjectBuilders;
+using VRageMath;
 
 namespace Digi.AdvancedWelding
 {
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder), true)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder), false)]
     public class AngleGrinder : MyGameLogicComponent
     {
-        public bool isYours = false;
-
-        public static bool detach = false;
-        public static bool isHolding = false;
-
-        private static IMyHudNotification toolStatus;
-        public static bool notified = false;
-
-        private const string DETACH_MODE_PREFIX = "DETACH MODE\n";
         private const int TOOLSTATUS_TIMEOUT = 200;
+        private const string DETACH_MODE_PREFIX = "DETACH MODE\n";
 
-        private static List<IMySlimBlock> blocks = new List<IMySlimBlock>();
+        public bool thisLocallyEquipped = false;
+
+        public static bool IsEquipped = false;
+        public static bool DetachMode = false;
+        public static bool Notified = false;
+        private static IMyHudNotification toolStatus;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
-        public static void SetToolStatus(string text, string font, int aliveTime = TOOLSTATUS_TIMEOUT)
+        public override void UpdateOnceBeforeFrame()
         {
             try
             {
-                if(toolStatus == null)
-                {
-                    toolStatus = MyAPIGateway.Utilities.CreateNotification(text, aliveTime, font);
-                }
-                else
-                {
-                    toolStatus.Font = font;
-                    toolStatus.Text = text;
-                    toolStatus.AliveTime = aliveTime;
-                }
+                var character = MyAPIGateway.Session.ControlledObject as IMyCharacter;
 
-                toolStatus.Show();
+                if(character != null)
+                {
+                    if(character.EquippedTool != null && character.EquippedTool.EntityId == Entity.EntityId)
+                    {
+                        thisLocallyEquipped = true;
+                        IsEquipped = true;
+                        NeedsUpdate |= MyEntityUpdateEnum.EACH_10TH_FRAME;
+
+                        if(!Notified)
+                        {
+                            Notified = true;
+                            SetToolStatus("Type [/detach] to detach blocks with angle grinders.", MyFontEnum.White, 5000);
+                        }
+                    }
+                }
             }
             catch(Exception e)
             {
@@ -55,28 +61,19 @@ namespace Digi.AdvancedWelding
             }
         }
 
-        public override void UpdateOnceBeforeFrame()
+        public override void Close()
         {
             try
             {
-                isYours = false;
-
-                if(MyAPIGateway.Session.ControlledObject is IMyCharacter)
+                if(thisLocallyEquipped)
                 {
-                    var playerEnt = MyAPIGateway.Session.ControlledObject.Entity;
-                    var charObj = playerEnt.GetObjectBuilder(false) as MyObjectBuilder_Character;
+                    thisLocallyEquipped = false;
+                    IsEquipped = false;
 
-                    if(charObj.HandWeapon != null && charObj.HandWeapon.EntityId == Entity.EntityId)
+                    if(DetachMode)
                     {
-                        isYours = true;
-                        isHolding = true;
-                        Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_10TH_FRAME;
-
-                        if(!notified)
-                        {
-                            notified = true;
-                            SetToolStatus("Type /detach to detach blocks with angle grinders.", MyFontEnum.DarkBlue, 3000);
-                        }
+                        SetToolStatus("Detach mode cancelled.", MyFontEnum.White, 1500);
+                        DetachMode = false;
                     }
                 }
             }
@@ -90,85 +87,52 @@ namespace Digi.AdvancedWelding
         {
             try
             {
-                if(!isYours || !detach)
+                if(!thisLocallyEquipped || !DetachMode)
                     return;
 
-                var grid = MyAPIGateway.CubeBuilder.FindClosestGrid();
+                var tool = (IMyGunObject<MyDeviceBase>)Entity;
+                var casterComp = Entity.Components.Get<MyCasterComponent>();
 
-                if(grid == null)
+                if(casterComp == null)
                 {
-                    SetToolStatus(DETACH_MODE_PREFIX + "Aim at a terminal block.", MyFontEnum.LoadingScreen);
+                    SetToolStatus($"This grinder is modded to not be able to aim, can't be used for detaching.", MyFontEnum.Red, 3000);
+                    DetachMode = false;
                     return;
                 }
 
-                var player = MyAPIGateway.Session.ControlledObject.Entity;
-                var playerPos = player.WorldMatrix.Translation + player.WorldMatrix.Up * 1.6;
-                var blockPos = grid.RayCastBlocks(playerPos, playerPos + player.WorldMatrix.Forward * 2.0);
-
-                if(!blockPos.HasValue)
-                {
-                    SetToolStatus(DETACH_MODE_PREFIX + "Aim at a terminal block.", MyFontEnum.LoadingScreen);
-                    return;
-                }
-
-                blocks.Clear();
-                grid.GetBlocks(blocks);
-                int blocksCount = blocks.Count;
-                blocks.Clear();
-
-                if(blocksCount == 1)
-                {
-                    SetToolStatus(DETACH_MODE_PREFIX + "That's the only block on the ship!", MyFontEnum.Red);
-                    return;
-                }
-
-                var slimBlock = grid.GetCubeBlock(blockPos.Value);
+                var slimBlock = casterComp.HitBlock as IMySlimBlock;
 
                 if(slimBlock == null)
                 {
-                    Log.Error("Unexpected empty block slot at " + blockPos.Value);
+                    SetToolStatus($"{DETACH_MODE_PREFIX}Aim at a block.");
                     return;
                 }
 
-                if(slimBlock.FatBlock == null || slimBlock.FatBlock.BlockDefinition.TypeIdString.EndsWith("CubeBlock"))
+                var blocksCount = ((MyCubeGrid)slimBlock.CubeGrid).BlocksCount;
+
+                if(blocksCount == 1)
                 {
-                    SetToolStatus(DETACH_MODE_PREFIX + "Aim at a terminal block.\n(No armor, no catwalks, no blast doors, etc)", MyFontEnum.Red);
+                    SetToolStatus($"{DETACH_MODE_PREFIX}This is the only block on the ship, nothing to detach from.");
                     return;
                 }
 
-                var blockName = ((MyCubeBlockDefinition)slimBlock.BlockDefinition).DisplayNameText;
-                var blockObj = slimBlock.GetObjectBuilder();
-                var defId = new MyDefinitionId(blockObj.TypeId, blockObj.SubtypeId);
-                MyCubeBlockDefinition blockDef;
+                var blockDef = (MyCubeBlockDefinition)slimBlock.BlockDefinition;
+                var buildRatio = slimBlock.BuildLevelRatio;
+                var criticalRatio = Math.Min(blockDef.CriticalIntegrityRatio + 0.2f, 1f); // +20% above critical integrity, capped to 100%.
 
-                if(!MyDefinitionManager.Static.TryGetCubeBlockDefinition(defId, out blockDef))
+                // check shoot too because the block could already be under this build stage
+                if(!tool.IsShooting || buildRatio >= criticalRatio)
                 {
-                    Log.Error("Unable to get block definition for " + defId.ToString());
+                    SetToolStatus($"{DETACH_MODE_PREFIX}Grind below {(int)(criticalRatio * 100)}% to detach.", MyFontEnum.Blue);
                     return;
                 }
 
-                var tool = Entity as Sandbox.Game.Entities.IMyGunObject<Sandbox.Game.Weapons.MyToolBase>;
-                int buildRatio = (int)(Math.Round(slimBlock.BuildLevelRatio, 2) * 100);
-                int criticalRatio = (int)(Math.Round(blockDef.CriticalIntegrityRatio, 2) * 100);
+                var packet = new DetachPacket(slimBlock.CubeGrid.EntityId, slimBlock.Position);
+                AdvancedWelding.Instance.Networking.SendToServer(packet);
 
-                // ShakeAmount is used to determine wether you're actually hitting a block
-                if(!tool.IsShooting || tool.ShakeAmount <= 1 || buildRatio > criticalRatio)
-                {
-                    SetToolStatus(DETACH_MODE_PREFIX + "Grind it below the red line.", MyFontEnum.Blue);
-                    return;
-                }
-
-                SetToolStatus(blockName + " detached!\nDetach mode now off.", MyFontEnum.Green, 3000);
-                detach = false;
-
-                var bytes = new List<byte>();
-                bytes.AddRange(BitConverter.GetBytes(grid.EntityId));
-                bytes.AddRange(BitConverter.GetBytes(slimBlock.Position.X));
-                bytes.AddRange(BitConverter.GetBytes(slimBlock.Position.Y));
-                bytes.AddRange(BitConverter.GetBytes(slimBlock.Position.Z));
-                // TODO add 4th dimmension when compound blocks are a thing
-
-                MyAPIGateway.Multiplayer.SendMessageToServer(AdvancedWelding.PACKET, bytes.ToArray(), true);
+                SetToolStatus($"{blockDef.DisplayNameText} detached!\nDetach mode turned off.", MyFontEnum.Green, 3000);
+                DetachMode = false;
+                PlayDetachSound(slimBlock);
             }
             catch(Exception e)
             {
@@ -176,21 +140,33 @@ namespace Digi.AdvancedWelding
             }
         }
 
-        public override void Close()
+        public static void PlayDetachSound(IMySlimBlock block)
+        {
+            Vector3D position;
+            block.ComputeWorldCenter(out position);
+
+            var camPos = MyAPIGateway.Session.Camera.WorldMatrix.Translation;
+
+            if(Vector3D.DistanceSquared(camPos, position) > 100 * 100)
+                return;
+
+            var emitter = new MyEntity3DSoundEmitter(null);
+            emitter.CustomVolume = 0.4f;
+            emitter.SetPosition(position);
+            emitter.PlaySingleSound(new MySoundPair("PrgDeconstrPh01Start"));
+        }
+
+        public static void SetToolStatus(string text, string font = MyFontEnum.White, int aliveTime = TOOLSTATUS_TIMEOUT)
         {
             try
             {
-                if(isYours)
-                {
-                    isYours = false;
-                    isHolding = false;
+                if(toolStatus == null)
+                    toolStatus = MyAPIGateway.Utilities.CreateNotification("");
 
-                    if(detach)
-                    {
-                        SetToolStatus("Detach mode cancelled.", MyFontEnum.Red, 1500);
-                        detach = false;
-                    }
-                }
+                toolStatus.Font = font;
+                toolStatus.Text = text;
+                toolStatus.AliveTime = aliveTime;
+                toolStatus.Show();
             }
             catch(Exception e)
             {

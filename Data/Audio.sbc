@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<Definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Sounds>
+    <Sound>
+      <Id>
+        <TypeId>MyObjectBuilder_AudioDefinition</TypeId>
+        <SubtypeId>ArcWeldPad_Weld</SubtypeId>
+      </Id>
+      <Category>BLOCK</Category>
+      <Volume>0.5</Volume>
+      <MaxDistance>35</MaxDistance>
+      <Loopable>false</Loopable>
+      <Waves>
+        <Wave Type="D3">
+          <Start>Audio\ArcWeldPad.wav</Start>
+        </Wave>
+      </Waves>
+    </Sound>
+    <Sound>
+      <Id>
+        <TypeId>MyObjectBuilder_AudioDefinition</TypeId>
+        <SubtypeId>RealWeldPad_Weld</SubtypeId>
+      </Id>
+      <Category>BLOCK</Category>
+      <Volume>2</Volume>
+      <MaxDistance>30</MaxDistance>
+      <Loopable>false</Loopable>
+      <Waves>
+        <Wave Type="D3">
+          <Start>Audio\RealWeldPad.wav</Start>
+        </Wave>
+      </Waves>
+    </Sound>
+  </Sounds>
+</Definitions>

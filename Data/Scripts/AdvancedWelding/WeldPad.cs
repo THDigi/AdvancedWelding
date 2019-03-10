@@ -1,65 +1,80 @@
 ﻿using System;
-using System.Collections.Generic;
+using Digi.AdvancedWelding.MP;
+using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using VRage.Game;
-using VRage.Game.ModAPI;
-using VRageMath;
-using VRage.ObjectBuilders;
 using VRage.Game.Components;
+using VRage.Game.ModAPI;
 using VRage.ModAPI;
+using VRage.ObjectBuilders;
+using VRageMath;
 
 namespace Digi.AdvancedWelding
 {
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TerminalBlock), true, "SmallWeldPad", "LargeWeldPad")]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TerminalBlock), false, "SmallWeldPad", "LargeWeldPad")]
     public class WeldPad : MyGameLogicComponent
     {
-        private MyObjectBuilder_EntityBase objectBuilder;
-
-        public static Base6Directions.Direction dirForward = Base6Directions.Direction.Up;
-        public static Base6Directions.Direction dirRight = Base6Directions.Direction.Right;
-
-        private bool master = false;
-        private IMyTerminalBlock otherPad = null;
-        private IMyHudNotification toolStatus;
-
         private const int TOOLSTATUS_TIMEOUT = 200;
         private const int NOTIFY_DISTANCE_SQ = 10 * 10;
+        private const Base6Directions.Direction DIR_FORWARD = Base6Directions.Direction.Up;
+        private const Base6Directions.Direction DIR_RIGHT = Base6Directions.Direction.Right;
+
+        private bool master = false;
+        private IMyCubeBlock pad;
+        private IMyCubeBlock otherPad;
+        private IMyHudNotification toolStatus;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            this.objectBuilder = objectBuilder;
-
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME | MyEntityUpdateEnum.EACH_10TH_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
         public override void UpdateOnceBeforeFrame()
         {
             try
             {
-                AdvancedWelding.pads.Add(Entity as IMyTerminalBlock);
+                pad = (IMyCubeBlock)Entity;
+
+                if(pad.CubeGrid?.Physics == null)
+                    return;
+
+                AdvancedWelding.Instance.Pads.Add(pad);
+
+                NeedsUpdate = MyEntityUpdateEnum.EACH_10TH_FRAME;
             }
             catch(Exception e)
             {
                 Log.Error(e);
             }
         }
-        
+
+        public override void Close()
+        {
+            try
+            {
+                AdvancedWelding.Instance.Pads.Remove(pad);
+                otherPad = null;
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
+            }
+        }
+
         public void SetToolStatus(string text, string font, int aliveTime = TOOLSTATUS_TIMEOUT)
         {
             try
             {
-                if(!AdvancedWelding.init || (MyAPIGateway.Utilities.IsDedicated && MyAPIGateway.Multiplayer.IsServer))
+                if(!Networking.IsPlayer)
                     return;
-
-                var pad = Entity as IMyTerminalBlock;
 
                 if(pad.GetPlayerRelationToOwner() == MyRelationsBetweenPlayerAndBlock.Enemies)
                     return;
 
-                var playerPos = MyAPIGateway.Session.Player.GetPosition();
+                var camPos = MyAPIGateway.Session.Camera.WorldMatrix.Translation;
                 var padPos = pad.GetPosition();
 
-                if(Vector3D.DistanceSquared(playerPos, padPos) > NOTIFY_DISTANCE_SQ)
+                if(Vector3D.DistanceSquared(camPos, padPos) > NOTIFY_DISTANCE_SQ)
                     return;
 
                 if(toolStatus == null)
@@ -85,15 +100,13 @@ namespace Digi.AdvancedWelding
         {
             try
             {
-                if(!AdvancedWelding.init || AdvancedWelding.pads.Count <= 1)
+                if(AdvancedWelding.Instance.Pads.Count <= 1)
                     return;
-
-                var pad = Entity as IMyTerminalBlock;
 
                 if(!pad.IsWorking)
                     return;
 
-                if(otherPad != null && (otherPad.Closed || otherPad.MarkedForClose))
+                if(otherPad != null && (otherPad.Closed || otherPad.MarkedForClose || otherPad.CubeGrid.Physics == null))
                 {
                     otherPad = null;
                     master = false;
@@ -103,29 +116,34 @@ namespace Digi.AdvancedWelding
                 if(otherPad != null && !master)
                     return; // only one pad 'thinks'
 
-                IMyCubeGrid padGrid = pad.CubeGrid as IMyCubeGrid;
+                var padGrid = pad.CubeGrid;
                 Vector3D pos = pad.WorldMatrix.Translation + pad.WorldMatrix.Down * (padGrid.GridSize / 2);
                 Vector3D otherPos = Vector3D.Zero;
                 double distSq = 0;
 
                 if(otherPad == null)
                 {
-                    foreach(var p in AdvancedWelding.pads)
+                    foreach(var p in AdvancedWelding.Instance.Pads)
                     {
-                        if(!p.IsWorking)
+                        if(p.EntityId == pad.EntityId
+                        || p.CubeGrid.Physics == null
+                        || p.CubeGrid.GridSizeEnum != padGrid.GridSizeEnum
+                        || (padGrid.IsStatic && p.CubeGrid.IsStatic)
+                        || !p.IsWorking)
                             continue;
 
-                        if(p.EntityId == pad.EntityId || p.CubeGrid.GridSizeEnum != padGrid.GridSizeEnum || (padGrid.IsStatic && p.CubeGrid.IsStatic))
-                            continue;
-
-                        otherPos = p.WorldMatrix.Translation + (-p.WorldMatrix.GetDirectionVector(dirForward) * (p.CubeGrid.GridSize / 2));
+                        otherPos = p.WorldMatrix.Translation + (-p.WorldMatrix.GetDirectionVector(DIR_FORWARD) * (p.CubeGrid.GridSize / 2));
                         distSq = Vector3D.DistanceSquared(pos, otherPos);
 
                         if(distSq <= p.CubeGrid.GridSize * p.CubeGrid.GridSize)
                         {
                             otherPad = p;
 
-                            var logic = otherPad.GameLogic as WeldPad;
+                            var logic = otherPad.GameLogic.GetAs<WeldPad>();
+
+                            if(logic == null)
+                                continue;
+
                             logic.otherPad = pad;
 
                             if(logic.master == false)
@@ -140,12 +158,12 @@ namespace Digi.AdvancedWelding
                 }
                 else
                 {
-                    otherPos = otherPad.WorldMatrix.Translation + (-otherPad.WorldMatrix.GetDirectionVector(dirForward) * (otherPad.CubeGrid.GridSize / 2));
+                    otherPos = otherPad.WorldMatrix.Translation + (-otherPad.WorldMatrix.GetDirectionVector(DIR_FORWARD) * (otherPad.CubeGrid.GridSize / 2));
                     distSq = Vector3D.DistanceSquared(pos, otherPos);
 
                     if(distSq > otherPad.CubeGrid.GridSize * otherPad.CubeGrid.GridSize)
                     {
-                        var logic = otherPad.GameLogic as WeldPad;
+                        var logic = otherPad.GameLogic.GetAs<WeldPad>();
                         logic.otherPad = null;
                         logic.master = false;
 
@@ -155,7 +173,7 @@ namespace Digi.AdvancedWelding
                     }
                 }
 
-                var otherGrid = otherPad.CubeGrid as IMyCubeGrid;
+                var otherGrid = otherPad.CubeGrid;
                 var axisDot = Math.Round(Vector3D.Dot(pad.WorldMatrix.Up, otherPad.WorldMatrix.Up), 2);
                 var rollDot = Math.Round(Vector3D.Dot(pad.WorldMatrix.Right, otherPad.WorldMatrix.GetDirectionVector(otherPad.WorldMatrix.GetClosestDirection(pad.WorldMatrix.Right))), 2);
                 var distReq = (padGrid.GridSizeEnum == MyCubeSize.Large ? 0.5 : 0.25);
@@ -163,31 +181,27 @@ namespace Digi.AdvancedWelding
 
                 if(dist <= 0 && axisDot == -1.0 && rollDot == 1.0)
                 {
-                    if(!CanMergeCubes(padGrid, otherGrid, AdvancedWelding.CalculateOffset(pad, otherPad), pad, otherPad))
+                    if(!CanMergeCubes(pad, otherPad, CalculateOffset(pad, otherPad)))
                     {
-                        SetToolStatus("WeldPad: Can't merge this way as blocks would overlap!", MyFontEnum.Red, 1000);
+                        SetToolStatus("WeldPad: Can't merge this way, blocks would overlap!", MyFontEnum.Red, 1000);
                         return;
                     }
 
                     if(!MyAPIGateway.Multiplayer.IsServer)
                     {
-                        Log.Info("Merge checks out, waiting for server...");
+                        Log.Info("Merge checks out clientside, waiting for server...");
                     }
                     else
                     {
+                        AdvancedWelding.Instance.ToMerge.Add(new MergeGrids(pad, otherPad));
+
                         padGrid.RemoveBlock(padGrid.GetCubeBlock(pad.Position));
                         otherGrid.RemoveBlock(otherGrid.GetCubeBlock(otherPad.Position));
 
-                        AdvancedWelding.mergeQueue.Add(new MergeGrids()
-                        {
-                            pad1 = pad,
-                            pad2 = otherPad,
-                        });
-
-                        Log.Info("Queued for merge " + padGrid + " and " + otherGrid);
+                        Log.Info($"Queued for merge {padGrid} and {otherGrid}");
                     }
 
-                    var logic = otherPad.GameLogic as WeldPad;
+                    var logic = otherPad.GameLogic.GetAs<WeldPad>();
                     logic.otherPad = null;
                     logic.master = false;
 
@@ -212,10 +226,10 @@ namespace Digi.AdvancedWelding
 
                     /*
                     Vector3D dir = (otherPos - pos);
-                    
+
                     if(!padGrid.IsStatic)
                         padGrid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, dir * 5 * otherPad.Mass, pos, null);
-                    
+
                     if(!otherGrid.IsStatic)
                         otherGrid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, -dir * 5 * pad.Mass, otherPos, null);
                      */
@@ -227,58 +241,54 @@ namespace Digi.AdvancedWelding
             }
         }
 
-        public bool CanMergeCubes(IMyCubeGrid grid, IMyCubeGrid gridToMerge, Vector3I gridOffset, IMyTerminalBlock pad, IMyTerminalBlock otherPad)
+        private static bool CanMergeCubes(IMyCubeBlock pad1, IMyCubeBlock pad2, Vector3I gridOffset)
         {
             try
             {
-                MatrixI transform = grid.CalculateMergeTransform(gridToMerge, gridOffset);
-                List<IMySlimBlock> blocks = new List<IMySlimBlock>();
-                gridToMerge.GetBlocks(blocks, delegate (IMySlimBlock b)
-                                      {
-                                          if(b.FatBlock is IMyTerminalBlock)
-                                          {
-                                              switch(b.FatBlock.BlockDefinition.SubtypeId)
-                                              {
-                                                  case "SmallWeldPad":
-                                                  case "LargeWeldPad":
-                                                      return false; // skip the weld pads as they will get removed anyway
-                                              }
-                                          }
+                var grid1 = pad1.CubeGrid;
+                var grid2 = pad2.CubeGrid;
 
-                                          return true;
-                                      });
+                var grid2blocks = AdvancedWelding.Instance.TmpBlocks;
+                grid2.GetBlocks(grid2blocks);
 
-                foreach(var block in blocks)
+                MatrixI transform = grid1.CalculateMergeTransform(grid2, gridOffset);
+                bool result = true;
+
+                // check gridToMerge's blocks against grid's blocks
+                foreach(var grid2slim in grid2blocks)
                 {
-                    Vector3I position = Vector3I.Transform(block.Position, transform);
+                    if(grid2slim.FatBlock == pad2)
+                        continue;
 
-                    if(grid.CubeExists(position))
+                    //switch(grid2slim.BlockDefinition.Id.SubtypeName)
+                    //{
+                    //    case "SmallWeldPad":
+                    //    case "LargeWeldPad":
+                    //        continue; // ignore weld pads' existence
+                    //}
+
+                    var pos = Vector3I.Transform(grid2slim.Position, transform);
+                    var grid1slim = grid1.GetCubeBlock(pos);
+
+                    if(grid1slim != null)
                     {
-                        var cube = grid.GetCubeBlock(position);
+                        if(grid1slim.FatBlock == pad1)
+                            continue;
 
-                        if(cube.FatBlock is IMyTerminalBlock)
-                        {
-                            bool skip = false;
+                        //switch(grid1slim.BlockDefinition.Id.SubtypeName)
+                        //{
+                        //    case "SmallWeldPad":
+                        //    case "LargeWeldPad":
+                        //        continue; // ignore weld pads' existence
+                        //}
 
-                            switch(cube.FatBlock.BlockDefinition.SubtypeId)
-                            {
-                                case "SmallWeldPad":
-                                case "LargeWeldPad":
-                                    skip = true;
-                                    break;
-                            }
-
-                            if(skip)
-                                continue;
-                        }
-
-                        // TODO check compound blocks when they're a thing, same as MyCubeGrid.CanMergeCubes() does
-
-                        return false;
+                        result = false;
+                        break;
                     }
                 }
 
-                return true;
+                grid2blocks.Clear();
+                return result;
             }
             catch(Exception e)
             {
@@ -288,18 +298,34 @@ namespace Digi.AdvancedWelding
             return false;
         }
 
-        public override void Close()
+        public static IMyCubeGrid MergeGrids(IMyCubeBlock pad1, IMyCubeBlock pad2, bool checkOrder)
         {
-            try
-            {
-                otherPad = null;
-                objectBuilder = null;
-                AdvancedWelding.pads.Remove(Entity as IMyTerminalBlock);
-            }
-            catch(Exception e)
-            {
-                Log.Error(e);
-            }
+            var grid1 = (MyCubeGrid)pad1.CubeGrid;
+            var grid2 = (MyCubeGrid)pad2.CubeGrid;
+            var offset = CalculateOffset(pad1, pad2);
+            return grid1.MergeGrid_MergeBlock(grid2, offset, checkOrder);
+        }
+
+        private static Vector3I CalculateOffset(IMyCubeBlock pad1, IMyCubeBlock pad2)
+        {
+            Base6Directions.Direction pad1forward = Base6Directions.Direction.Up;
+            Base6Directions.Direction pad1right = Base6Directions.GetPerpendicular(pad1forward);
+            Base6Directions.Direction pad2forward = pad1forward;
+
+            Base6Directions.Direction thisRight = pad1.Orientation.TransformDirection(pad1right);
+            Base6Directions.Direction thisForward = pad1.Orientation.TransformDirection(pad1forward);
+
+            Base6Directions.Direction otherBackward = Base6Directions.GetFlippedDirection(pad2.Orientation.TransformDirection(pad2forward));
+            Base6Directions.Direction otherRight = pad2.CubeGrid.WorldMatrix.GetClosestDirection(pad1.CubeGrid.WorldMatrix.GetDirectionVector(thisRight));
+
+            Vector3 myConstraint = pad1.Position;
+            Vector3 otherConstraint = -(pad2.Position + pad2.PositionComp.LocalMatrix.GetDirectionVector(otherBackward));
+
+            Vector3 toOtherOrigin;
+            MatrixI rotation = MatrixI.CreateRotation(otherRight, otherBackward, thisRight, thisForward);
+            Vector3.Transform(ref otherConstraint, ref rotation, out toOtherOrigin);
+
+            return Vector3I.Round(myConstraint + toOtherOrigin);
         }
     }
 }

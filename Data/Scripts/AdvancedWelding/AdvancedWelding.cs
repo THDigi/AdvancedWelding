@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Sandbox.Definitions;
+using Digi.AdvancedWelding.MP;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
@@ -9,63 +9,69 @@ using VRageMath;
 
 namespace Digi.AdvancedWelding
 {
-    public class MergeGrids
-    {
-        public IMyTerminalBlock pad1, pad2;
-        public int skipped = 0;
-
-        public MergeGrids() { }
-    }
-
-    [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
+    [MySessionComponentDescriptor(MyUpdateOrder.NoUpdate)]
     public class AdvancedWelding : MySessionComponentBase
     {
+        private const int WAIT_UNTIL_MERGE = 10;
+
+        public static AdvancedWelding Instance;
+
+        private bool init = false;
+        private bool detachCancelNotified = false;
+
+        public readonly Networking Networking = new Networking(9472);
+
+        public readonly List<IMyCubeBlock> Pads = new List<IMyCubeBlock>();
+        public readonly List<MergeGrids> ToMerge = new List<MergeGrids>();
+
+        public readonly List<IMySlimBlock> TmpBlocks = new List<IMySlimBlock>();
+
         public override void LoadData()
         {
-            Log.SetUp("Advanced Welding", 510790477, "AdvancedWelding");
+            Instance = this;
+            Log.ModName = "Advanced Welding";
+            Log.AutoClose = false;
         }
 
-        public static bool init { get; private set; }
-
-        public static readonly ushort PACKET = 9472;
-
-        private static bool detachCancelNotified = false;
-        public static List<IMyTerminalBlock> pads = new List<IMyTerminalBlock>();
-        public static List<MergeGrids> mergeQueue = new List<MergeGrids>();
-
-        public void Init()
+        public override void BeforeStart()
         {
-            Log.Init();
             init = true;
-            AngleGrinder.notified = false;
-            AngleGrinder.detach = false;
 
-            if(MyAPIGateway.Multiplayer.IsServer)
-                MyAPIGateway.Multiplayer.RegisterMessageHandler(PACKET, PacketReceived);
+            Networking.Register();
 
-            if(!(MyAPIGateway.Multiplayer.IsServer && MyAPIGateway.Utilities.IsDedicated))
+            AngleGrinder.Notified = false;
+            AngleGrinder.DetachMode = false;
+
+            if(Networking.IsPlayer)
+            {
                 MyAPIGateway.Utilities.MessageEntered += MessageEntered;
+            }
+
+            if(Networking.IsServer)
+            {
+                SetUpdateOrder(MyUpdateOrder.AfterSimulation);
+            }
         }
 
         protected override void UnloadData()
         {
             try
             {
-                if(init)
-                {
-                    init = false;
-                    MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
-                    MyAPIGateway.Multiplayer.UnregisterMessageHandler(PACKET, PacketReceived);
-                }
+                init = false;
 
-                pads.Clear();
-                mergeQueue.Clear();
+                MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
+
+                Networking.Unregister();
+
+                Pads.Clear();
+                ToMerge.Clear();
             }
             catch(Exception e)
             {
                 Log.Error(e);
             }
 
+            Instance = null;
             Log.Close();
         }
 
@@ -74,45 +80,9 @@ namespace Digi.AdvancedWelding
             try
             {
                 if(!init)
-                {
-                    if(MyAPIGateway.Session == null)
-                        return;
+                    return;
 
-                    Init();
-                }
-
-                if(mergeQueue.Count > 0)
-                {
-                    List<int> toRemove = new List<int>(mergeQueue.Count);
-
-                    for(int i = 0; i < mergeQueue.Count; i++)
-                    {
-                        var merge = mergeQueue[i];
-
-                        if(merge.skipped <= 10)
-                        {
-                            merge.skipped += 1;
-                            continue;
-                        }
-
-                        var newGrid = MergeGrids(merge.pad1, merge.pad2);
-
-                        if(newGrid == null)
-                            newGrid = MergeGrids(merge.pad2, merge.pad1);
-
-                        Log.Info("merged to " + newGrid);
-
-                        toRemove.Add(i);
-                    }
-
-                    foreach(var i in toRemove)
-                    {
-                        mergeQueue.RemoveAt(i);
-                    }
-
-                    toRemove.Clear();
-                    toRemove = null;
-                }
+                ProcessMergeQueue();
             }
             catch(Exception e)
             {
@@ -120,117 +90,53 @@ namespace Digi.AdvancedWelding
             }
         }
 
-        private void PacketReceived(byte[] bytes)
+        private void ProcessMergeQueue()
         {
-            try
+            if(ToMerge.Count == 0 || !Networking.IsServer)
+                return;
+
+            for(int i = ToMerge.Count - 1; i >= 0; --i)
             {
-                int index = 0;
-                long gridId = BitConverter.ToInt64(bytes, index);
-                index += sizeof(long);
+                var merge = ToMerge[i];
 
-                var slimPos = new Vector3I(
-                    BitConverter.ToInt32(bytes, index),
-                    BitConverter.ToInt32(bytes, index + sizeof(int)),
-                    BitConverter.ToInt32(bytes, index + sizeof(int) + sizeof(int)));
-                index += sizeof(int) * 3;
-
-                if(!MyAPIGateway.Entities.EntityExists(gridId))
+                if(merge.Pad1.CubeGrid == merge.Pad2.CubeGrid) // already got merged by other means
                 {
-                    Log.Error("Can't find grid entity ID: " + gridId);
-                    return;
+                    ToMerge.RemoveAtFast(i);
+                    continue;
                 }
 
-                var grid = MyAPIGateway.Entities.GetEntityById(gridId) as IMyCubeGrid;
+                if(++merge.WaitedTicks < WAIT_UNTIL_MERGE)
+                    continue;
 
-                if(grid == null)
+                Matrix matrixForEffects = merge.Pad1LocalMatrix;
+                var newGrid = WeldPad.MergeGrids(merge.Pad1, merge.Pad2, true);
+
+                if(newGrid == null)
                 {
-                    Log.Error("Target entity is not a grid! gridId=" + gridId + "; ToString=" + grid.ToString());
-                    return;
+                    newGrid = WeldPad.MergeGrids(merge.Pad2, merge.Pad1, false);
+                    matrixForEffects = merge.Pad2LocalMatrix;
                 }
 
-                var slimBlock = grid.GetCubeBlock(slimPos);
-
-                if(slimBlock == null)
+                if(newGrid == null)
                 {
-                    Log.Error("Target block does not exist in the grid; gridId=" + gridId + "; pos=" + slimPos);
-                    return;
+                    Log.Error("Unable to merge!", Log.PRINT_MSG);
+                }
+                else
+                {
+                    Log.Info($"Merged to {newGrid}");
+
+                    var effectPos = matrixForEffects.Translation;
+                    var effectOrientation = Quaternion.CreateFromRotationMatrix(matrixForEffects);
+                    var packet = new WeldEffectsPacket(newGrid.EntityId, effectPos, effectOrientation);
+
+                    Networking.RelayToClients(packet, true);
                 }
 
-                var blockName = ((MyCubeBlockDefinition)slimBlock.BlockDefinition).DisplayNameText;
-                var blockObj = slimBlock.GetObjectBuilder();
-
-                var gridObj = grid.GetObjectBuilder(false) as MyObjectBuilder_CubeGrid;
-                gridObj.DisplayName = "(Detached " + blockName + ")";
-                gridObj.IsStatic = false;
-                gridObj.ConveyorLines = null;
-
-                if(gridObj.OxygenAmount != null && gridObj.OxygenAmount.Length > 0)
-                    gridObj.OxygenAmount = new float[0];
-
-                if(gridObj.BlockGroups != null)
-                    gridObj.BlockGroups.Clear();
-
-                var addBlockObj = blockObj;
-
-                foreach(var b in gridObj.CubeBlocks)
-                {
-                    if(b.EntityId == blockObj.EntityId)
-                    {
-                        addBlockObj = b;
-                        break;
-                    }
-                }
-
-                gridObj.CubeBlocks.Clear();
-                gridObj.CubeBlocks.Add(addBlockObj);
-
-                grid.RemoveBlock(slimBlock, true);
-
-                MyAPIGateway.Entities.RemapObjectBuilder(gridObj);
-                var ent = MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(gridObj);
-
-                if(ent == null)
-                {
-                    Log.Error("Failed to create a new grid! object=" + gridObj);
-                    return;
-                }
-
-                Log.Info("Detached " + blockName + ", new grid id=" + ent.EntityId);
-            }
-            catch(Exception e)
-            {
-                Log.Error(e);
+                ToMerge.RemoveAtFast(i);
             }
         }
 
-        public static Vector3I CalculateOffset(IMyTerminalBlock pad1, IMyTerminalBlock pad2)
-        {
-            Base6Directions.Direction pad1forward = Base6Directions.Direction.Up;
-            Base6Directions.Direction pad1right = Base6Directions.GetPerpendicular(pad1forward);
-            Base6Directions.Direction pad2forward = pad1forward;
-
-            Base6Directions.Direction thisRight = pad1.Orientation.TransformDirection(pad1right);
-            Base6Directions.Direction thisForward = pad1.Orientation.TransformDirection(pad1forward);
-
-            Base6Directions.Direction otherBackward = Base6Directions.GetFlippedDirection(pad2.Orientation.TransformDirection(pad2forward));
-            Base6Directions.Direction otherRight = pad2.CubeGrid.WorldMatrix.GetClosestDirection(pad1.CubeGrid.WorldMatrix.GetDirectionVector(thisRight));
-
-            Vector3 myConstraint = pad1.Position;
-            Vector3 otherConstraint = -(pad2.Position + pad2.PositionComp.LocalMatrix.GetDirectionVector(otherBackward));
-
-            Vector3 toOtherOrigin;
-            MatrixI rotation = MatrixI.CreateRotation(otherRight, otherBackward, thisRight, thisForward);
-            Vector3.Transform(ref otherConstraint, ref rotation, out toOtherOrigin);
-
-            return Vector3I.Round(myConstraint + toOtherOrigin);
-        }
-
-        public static IMyCubeGrid MergeGrids(IMyTerminalBlock pad1, IMyTerminalBlock pad2)
-        {
-            return (pad1.CubeGrid as IMyCubeGrid).MergeGrid_MergeBlock(pad2.CubeGrid as IMyCubeGrid, CalculateOffset(pad1, pad2));
-        }
-
-        public void MessageEntered(string msg, ref bool send)
+        private void MessageEntered(string msg, ref bool send)
         {
             if(msg.StartsWith("/detach", StringComparison.InvariantCultureIgnoreCase))
             {
@@ -238,25 +144,25 @@ namespace Digi.AdvancedWelding
 
                 if(msg.StartsWith("/detach cancel"))
                 {
-                    if(AngleGrinder.detach)
+                    if(AngleGrinder.DetachMode)
                     {
-                        AngleGrinder.detach = false;
-                        MyAPIGateway.Utilities.ShowMessage(Log.modName, "Block detach mode turned off.");
+                        AngleGrinder.DetachMode = false;
+                        MyAPIGateway.Utilities.ShowMessage(Log.ModName, "Block detach mode turned off.");
                     }
                 }
                 else
                 {
-                    AngleGrinder.detach = true;
+                    AngleGrinder.DetachMode = true;
 
-                    if(!AngleGrinder.isHolding)
+                    if(!AngleGrinder.IsEquipped)
                     {
-                        AngleGrinder.SetToolStatus("Detach mode enabled, switch to your angle grinder to begin...", MyFontEnum.Blue, 5000);
+                        AngleGrinder.SetToolStatus("Detach mode enabled, switch to your [Angle Grinder] to begin...", MyFontEnum.Blue, 5000);
                     }
 
                     if(!detachCancelNotified)
                     {
                         detachCancelNotified = true;
-                        MyAPIGateway.Utilities.ShowMessage(Log.modName, "To cancel this mode just holster your grinder or type /detach cancel.");
+                        MyAPIGateway.Utilities.ShowMessage(Log.ModName, "To cancel this mode just holster your grinder or type [/detach cancel].");
                     }
                 }
             }
