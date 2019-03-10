@@ -102,9 +102,9 @@ namespace Digi.AdvancedWelding
 
                 var slimBlock = casterComp.HitBlock as IMySlimBlock;
 
-                if(slimBlock == null)
+                if(slimBlock == null || !(slimBlock.FatBlock is IMyTerminalBlock))
                 {
-                    SetToolStatus($"{DETACH_MODE_PREFIX}Aim at a block.");
+                    SetToolStatus($"{DETACH_MODE_PREFIX}Aim at a terminal block.");
                     return;
                 }
 
@@ -118,7 +118,7 @@ namespace Digi.AdvancedWelding
 
                 var blockDef = (MyCubeBlockDefinition)slimBlock.BlockDefinition;
                 var buildRatio = slimBlock.BuildLevelRatio;
-                var criticalRatio = Math.Min(blockDef.CriticalIntegrityRatio + 0.2f, 1f); // +20% above critical integrity, capped to 100%.
+                var criticalRatio = Math.Min(blockDef.CriticalIntegrityRatio + 0.1f, 1f); // +10% above critical integrity, capped to 100%.
 
                 // check shoot too because the block could already be under this build stage
                 if(!tool.IsShooting || buildRatio >= criticalRatio)
