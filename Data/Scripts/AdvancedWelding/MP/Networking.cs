@@ -12,7 +12,7 @@ namespace Digi.AdvancedWelding.MP
         /// <summary>
         /// If local machine has a render/player. Does not exclude being a server.
         /// </summary>
-        public static bool IsPlayer => MyAPIGateway.Session.Player != null;
+        public static bool IsPlayer => !IsDS;
 
         /// <summary>
         /// This includes singleplayer, player-hosted game and DS.
