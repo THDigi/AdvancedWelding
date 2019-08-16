@@ -138,11 +138,11 @@ namespace Digi.AdvancedWelding
 
         private void MessageEntered(string msg, ref bool send)
         {
-            if(msg.StartsWith("/detach", StringComparison.InvariantCultureIgnoreCase))
+            if(msg.StartsWith("/detach", StringComparison.OrdinalIgnoreCase))
             {
                 send = false;
 
-                if(msg.StartsWith("/detach cancel"))
+                if(msg.StartsWith("/detach cancel", StringComparison.OrdinalIgnoreCase))
                 {
                     if(AngleGrinder.DetachMode)
                     {
@@ -162,7 +162,7 @@ namespace Digi.AdvancedWelding
                     if(!detachCancelNotified)
                     {
                         detachCancelNotified = true;
-                        MyAPIGateway.Utilities.ShowMessage(Log.ModName, "To cancel this mode just holster your grinder or type [/detach cancel].");
+                        MyAPIGateway.Utilities.ShowMessage(Log.ModName, "To cancel this mode just holster your grinder or type /detach cancel");
                     }
                 }
             }
