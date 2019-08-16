@@ -50,7 +50,7 @@ namespace Digi.AdvancedWelding
                         if(!Notified)
                         {
                             Notified = true;
-                            SetToolStatus("Type [/detach] to detach blocks with angle grinders.", MyFontEnum.White, 5000);
+                            SetToolStatus("You can detach blocks with [Ctrl] while grinding.", MyFontEnum.White, 5000);
                         }
                     }
                 }
@@ -87,7 +87,15 @@ namespace Digi.AdvancedWelding
         {
             try
             {
-                if(!thisLocallyEquipped || !DetachMode)
+                if(!thisLocallyEquipped)
+                    return;
+
+                bool detach = DetachMode;
+
+                if(!detach)
+                    detach = !(MyAPIGateway.Gui.IsCursorVisible || MyAPIGateway.Gui.ChatEntryVisible) && MyAPIGateway.Input.IsAnyCtrlKeyPressed();
+
+                if(!detach)
                     return;
 
                 var tool = (IMyGunObject<MyDeviceBase>)Entity;
@@ -95,16 +103,22 @@ namespace Digi.AdvancedWelding
 
                 if(casterComp == null)
                 {
-                    SetToolStatus($"This grinder is modded to not be able to aim, can't be used for detaching.", MyFontEnum.Red, 3000);
+                    SetToolStatus($"This grinder is modded to not be able to select blocks, can't be used for detaching.", MyFontEnum.Red, 3000);
                     DetachMode = false;
                     return;
                 }
 
                 var slimBlock = casterComp.HitBlock as IMySlimBlock;
 
-                if(slimBlock == null || !(slimBlock.FatBlock is IMyTerminalBlock))
+                if(slimBlock == null)
                 {
                     SetToolStatus($"{DETACH_MODE_PREFIX}Aim at a terminal block.");
+                    return;
+                }
+
+                if(!(slimBlock.FatBlock is IMyTerminalBlock))
+                {
+                    SetToolStatus($"{DETACH_MODE_PREFIX}Aim at a terminal block.", MyFontEnum.Red);
                     return;
                 }
 
@@ -112,7 +126,7 @@ namespace Digi.AdvancedWelding
 
                 if(blocksCount == 1)
                 {
-                    SetToolStatus($"{DETACH_MODE_PREFIX}This is the only block on the ship, nothing to detach from.");
+                    SetToolStatus($"{DETACH_MODE_PREFIX}This is the only block on the ship, nothing to detach from.", MyFontEnum.Red);
                     return;
                 }
 
@@ -130,7 +144,7 @@ namespace Digi.AdvancedWelding
                 var packet = new DetachPacket(slimBlock.CubeGrid.EntityId, slimBlock.Position);
                 AdvancedWelding.Instance.Networking.SendToServer(packet);
 
-                SetToolStatus($"{blockDef.DisplayNameText} detached!\nDetach mode turned off.", MyFontEnum.Green, 3000);
+                SetToolStatus($"{blockDef.DisplayNameText} detached!", MyFontEnum.Green, 3000);
                 DetachMode = false;
                 PlayDetachSound(slimBlock);
             }
@@ -158,20 +172,13 @@ namespace Digi.AdvancedWelding
 
         public static void SetToolStatus(string text, string font = MyFontEnum.White, int aliveTime = TOOLSTATUS_TIMEOUT)
         {
-            try
-            {
-                if(toolStatus == null)
-                    toolStatus = MyAPIGateway.Utilities.CreateNotification("");
+            if(toolStatus == null)
+                toolStatus = MyAPIGateway.Utilities.CreateNotification("");
 
-                toolStatus.Font = font;
-                toolStatus.Text = text;
-                toolStatus.AliveTime = aliveTime;
-                toolStatus.Show();
-            }
-            catch(Exception e)
-            {
-                Log.Error(e);
-            }
+            toolStatus.Font = font;
+            toolStatus.Text = text;
+            toolStatus.AliveTime = aliveTime;
+            toolStatus.Show();
         }
     }
 }
