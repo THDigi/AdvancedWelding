@@ -15,7 +15,7 @@ namespace Digi.AdvancedWelding
     public class WeldPad : MyGameLogicComponent
     {
         private const int TOOLSTATUS_TIMEOUT = 200;
-        private const int NOTIFY_DISTANCE_SQ = 10 * 10;
+        private const int NOTIFY_DISTANCE_SQ = 20 * 20;
         private const Base6Directions.Direction DIR_FORWARD = Base6Directions.Direction.Up;
         private const Base6Directions.Direction DIR_RIGHT = Base6Directions.Direction.Right;
 
