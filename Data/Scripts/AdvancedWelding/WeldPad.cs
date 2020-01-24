@@ -213,10 +213,10 @@ namespace Digi.AdvancedWelding
                 else
                 {
                     // double dist = Math.Abs(((distSq - distReq) - pad.CubeGrid.GridSize) / pad.CubeGrid.GridSize) * 100;
-                    int axisDist = 100 - (int)((Math.Abs(axisDot - -1.0) / 2) * 100);
-                    int rollDist = 100 - (int)((Math.Abs(rollDot - 1.0) / 2) * 100);
+                    double axisDist = 100 - ((Math.Abs(axisDot - -1.0) / 2) * 100);
+                    double rollDist = 100 - ((Math.Abs(rollDot - 1.0) / 2) * 100);
 
-                    SetToolStatus("WeldPad: Distance = " + Math.Round(dist, 2) + "m, axis = " + axisDist + "%, roll = " + rollDist + "%", MyFontEnum.Blue);
+                    SetToolStatus($"WeldPad: Distance = {Math.Max(dist, 0).ToString("0.00")}m, axis = {axisDist.ToString("0.00")}%, roll = {rollDist.ToString("0.00")}%", MyFontEnum.Blue);
 
                     //MyAPIGateway.Utilities.ShowNotification("[debug] offset="+AdvancedWelding.CalculateOffset(padGrid, otherGrid, pad)+"; offset2="+AdvancedWelding.CalculateOffset(otherGrid, padGrid, otherPad), 160, MyFontEnum.Blue);
                     //MyAPIGateway.Utilities.ShowNotification("[debug] offset="+AdvancedWelding.CalculateOffset(pad, otherPad)+"; offset2="+AdvancedWelding.CalculateOffset(otherPad, pad), 160, MyFontEnum.Blue);
