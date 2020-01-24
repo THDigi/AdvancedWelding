@@ -195,8 +195,11 @@ namespace Digi.AdvancedWelding
                     {
                         AdvancedWelding.Instance.ToMerge.Add(new MergeGrids(pad, otherPad));
 
-                        padGrid.RemoveBlock(padGrid.GetCubeBlock(pad.Position));
-                        otherGrid.RemoveBlock(otherGrid.GetCubeBlock(otherPad.Position));
+                        padGrid.RemoveBlock(pad.SlimBlock);
+                        otherGrid.RemoveBlock(otherPad.SlimBlock);
+
+                        RemoveAllWeldPads(padGrid);
+                        RemoveAllWeldPads(otherGrid);
 
                         Log.Info($"Queued for merge {padGrid} and {otherGrid}");
                     }
@@ -239,6 +242,27 @@ namespace Digi.AdvancedWelding
             {
                 Log.Error(e);
             }
+        }
+
+        private static void RemoveAllWeldPads(IMyCubeGrid grid)
+        {
+            var blocks = AdvancedWelding.Instance.TmpBlocks;
+            blocks.Clear();
+
+            var gridInternal = (MyCubeGrid)grid;
+
+            foreach(var block in gridInternal.GetFatBlocks())
+            {
+                if(IsWeldPad(block.BlockDefinition.Id))
+                    blocks.Add(block.SlimBlock);
+            }
+
+            foreach(var block in blocks)
+            {
+                grid.RemoveBlock(block);
+            }
+
+            blocks.Clear();
         }
 
         private static bool CanMergeCubes(IMyCubeBlock pad1, IMyCubeBlock pad2, Vector3I gridOffset)
