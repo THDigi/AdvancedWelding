@@ -106,7 +106,7 @@ namespace Digi.AdvancedWelding
                 if(!pad.IsWorking)
                     return;
 
-                if(otherPad != null && (otherPad.Closed || otherPad.MarkedForClose || otherPad.CubeGrid.Physics == null))
+                if(otherPad != null && (otherPad.Closed || otherPad.MarkedForClose || otherPad.CubeGrid?.Physics == null || !otherPad.IsWorking))
                 {
                     otherPad = null;
                     master = false;
@@ -126,7 +126,7 @@ namespace Digi.AdvancedWelding
                     foreach(var p in AdvancedWelding.Instance.Pads)
                     {
                         if(p.EntityId == pad.EntityId
-                        || p.CubeGrid.Physics == null
+                        || p.CubeGrid?.Physics == null
                         || p.CubeGrid.GridSizeEnum != padGrid.GridSizeEnum
                         || (padGrid.IsStatic && p.CubeGrid.IsStatic)
                         || !p.IsWorking)
