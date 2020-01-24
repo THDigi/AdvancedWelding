@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Digi.AdvancedWelding.MP;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -7,7 +8,9 @@ using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
+using VRage.Utils;
 using VRageMath;
+//using BlendTypeEnum = VRageRender.MyBillboard.BlendTypeEnum;
 
 namespace Digi.AdvancedWelding
 {
@@ -145,9 +148,17 @@ namespace Digi.AdvancedWelding
                                 continue;
 
                             logic.otherPad = pad;
+                            logic.master = false;
+                            master = false;
 
-                            if(logic.master == false)
+                            var padGridInternal = (MyCubeGrid)padGrid;
+                            var otherGridInternal = (MyCubeGrid)p.CubeGrid;
+                            var parentGrid = GetMergeParent(padGridInternal, otherGridInternal);
+
+                            if(parentGrid == padGridInternal)
                                 master = true;
+                            else
+                                logic.master = true;
 
                             break;
                         }
@@ -186,6 +197,15 @@ namespace Digi.AdvancedWelding
                         SetToolStatus("WeldPad: Can't merge this way, blocks would overlap!", MyFontEnum.Red, 1000);
                         return;
                     }
+
+                    //if(MyAPIGateway.GridGroups.HasConnection(pad.CubeGrid, otherPad.CubeGrid, GridLinkTypeEnum.Physical))
+                    //{
+                    //    SetToolStatus("WeldPad: Can't merge physically connected grids!", MyFontEnum.Red, 1000);
+                    //    return;
+                    //}
+
+                    //SetToolStatus("WeldPad: Succesfully fake merged", MyFontEnum.Green, 1000);
+                    //return;
 
                     if(!MyAPIGateway.Multiplayer.IsServer)
                     {
@@ -272,51 +292,105 @@ namespace Digi.AdvancedWelding
                 var grid1 = pad1.CubeGrid;
                 var grid2 = pad2.CubeGrid;
 
-                var grid2blocks = AdvancedWelding.Instance.TmpBlocks;
-                grid2.GetBlocks(grid2blocks);
+                var blocksGrid2 = AdvancedWelding.Instance.TmpBlocks;
+                blocksGrid2.Clear();
+                grid2.GetBlocks(blocksGrid2);
 
                 MatrixI transform = grid1.CalculateMergeTransform(grid2, gridOffset);
                 bool result = true;
 
                 // check gridToMerge's blocks against grid's blocks
-                foreach(var grid2slim in grid2blocks)
+                foreach(var slimGrid2 in blocksGrid2)
                 {
-                    if(grid2slim.FatBlock == pad2)
+                    if(slimGrid2.FatBlock == pad2)
                         continue;
 
-                    //switch(grid2slim.BlockDefinition.Id.SubtypeName)
-                    //{
-                    //    case "SmallWeldPad":
-                    //    case "LargeWeldPad":
-                    //        continue; // ignore weld pads' existence
-                    //}
+                    // ignore all pads
+                    if(IsWeldPad(slimGrid2.BlockDefinition.Id))
+                        continue;
 
-                    var pos = Vector3I.Transform(grid2slim.Position, transform);
-                    var grid1slim = grid1.GetCubeBlock(pos);
+                    var pos = Vector3I.Transform(slimGrid2.Position, transform);
+                    var slimGrid1 = grid1.GetCubeBlock(pos);
 
-                    if(grid1slim != null)
+                    if(slimGrid1 != null)
                     {
-                        if(grid1slim.FatBlock == pad1)
+                        if(slimGrid1.FatBlock == pad1)
                             continue;
 
-                        //switch(grid1slim.BlockDefinition.Id.SubtypeName)
-                        //{
-                        //    case "SmallWeldPad":
-                        //    case "LargeWeldPad":
-                        //        continue; // ignore weld pads' existence
-                        //}
+                        // ignore all pads
+                        if(IsWeldPad(slimGrid1.BlockDefinition.Id))
+                            continue;
+
+                        //MyAPIGateway.Utilities.ShowNotification($"{(master ? "master" : "slavetest")} :: {slimGrid1.BlockDefinition.ToString()} OVERLAPS {slimGrid2.BlockDefinition.ToString()}", 16);
+                        //DebugDraw(slimGrid1.CubeGrid, slimGrid1.Min, slimGrid1.Max, Color.Red, master);
+                        //DebugDraw(slimGrid2.CubeGrid, slimGrid2.Min, slimGrid2.Max, Color.Yellow, master);
+                        //result = false;
+                        //continue;
 
                         result = false;
                         break;
                     }
+
+                    //DebugDraw(grid1, pos, pos, Color.Blue, master);
                 }
 
-                grid2blocks.Clear();
+                blocksGrid2.Clear();
                 return result;
             }
             catch(Exception e)
             {
                 Log.Error(e);
+            }
+
+            return false;
+        }
+
+        private static bool IsWeldPad(MyDefinitionId defId)
+        {
+            if(defId.TypeId == typeof(MyObjectBuilder_TerminalBlock))
+            {
+                switch(defId.SubtypeName)
+                {
+                    case "SmallWeldPad":
+                    case "LargeWeldPad":
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private MyCubeGrid GetMergeParent(MyCubeGrid grid1, MyCubeGrid grid2)
+        {
+            bool g1rooted = IsRooted(grid1);
+            bool g2rooted = IsRooted(grid2);
+
+            if(g1rooted && !g2rooted)
+                return grid1;
+
+            if(g2rooted && !g1rooted)
+                return grid2;
+
+            if(grid1.BlocksCount > grid2.BlocksCount)
+                return grid1;
+
+            return grid2;
+        }
+
+        private bool IsRooted(IMyCubeGrid grid)
+        {
+            if(grid.IsStatic)
+                return true;
+
+            var group = MyAPIGateway.GridGroups.GetGroup(grid, GridLinkTypeEnum.Physical);
+
+            if(group == null || group.Count == 1)
+                return false;
+
+            foreach(var g in group)
+            {
+                if(g.IsStatic)
+                    return true;
             }
 
             return false;
@@ -332,24 +406,56 @@ namespace Digi.AdvancedWelding
 
         private static Vector3I CalculateOffset(IMyCubeBlock pad1, IMyCubeBlock pad2)
         {
-            Base6Directions.Direction pad1forward = Base6Directions.Direction.Up;
-            Base6Directions.Direction pad1right = Base6Directions.GetPerpendicular(pad1forward);
-            Base6Directions.Direction pad2forward = pad1forward;
+            Vector3 pad1local = pad1.Position; // ConstraintPositionInGridSpace(pad1) / pad1.CubeGrid.GridSize;
+            Vector3 pad2local = -pad2.Position; // -ConstraintPositionInGridSpace(pad2) / pad2.CubeGrid.GridSize;
 
-            Base6Directions.Direction thisRight = pad1.Orientation.TransformDirection(pad1right);
-            Base6Directions.Direction thisForward = pad1.Orientation.TransformDirection(pad1forward);
+            // I dunno why it works but it seems to do in the tests I made xD
+            pad1local += Base6Directions.GetVector(pad1.Orientation.TransformDirection(Base6Directions.GetOppositeDirection(DIR_FORWARD)));
+            //pad2local += Base6Directions.GetVector(pad2.Orientation.TransformDirection(Base6Directions.GetOppositeDirection(DIR_FORWARD)));
 
-            Base6Directions.Direction otherBackward = Base6Directions.GetFlippedDirection(pad2.Orientation.TransformDirection(pad2forward));
-            Base6Directions.Direction otherRight = pad2.CubeGrid.WorldMatrix.GetClosestDirection(pad1.CubeGrid.WorldMatrix.GetDirectionVector(thisRight));
+            Base6Directions.Direction direction = pad1.Orientation.TransformDirection(DIR_RIGHT);
 
-            Vector3 myConstraint = pad1.Position;
-            Vector3 otherConstraint = -(pad2.Position + pad2.PositionComp.LocalMatrix.GetDirectionVector(otherBackward));
+            MatrixI matrix = MatrixI.CreateRotation(
+                newB: pad1.Orientation.TransformDirection(DIR_FORWARD),
+                oldB: Base6Directions.GetFlippedDirection(pad2.Orientation.TransformDirection(DIR_FORWARD)),
+                oldA: pad2.CubeGrid.WorldMatrix.GetClosestDirection(pad1.CubeGrid.WorldMatrix.GetDirectionVector(direction)),
+                newA: direction);
 
-            Vector3 toOtherOrigin;
-            MatrixI rotation = MatrixI.CreateRotation(otherRight, otherBackward, thisRight, thisForward);
-            Vector3.Transform(ref otherConstraint, ref rotation, out toOtherOrigin);
-
-            return Vector3I.Round(myConstraint + toOtherOrigin);
+            Vector3 offset;
+            Vector3.Transform(ref pad2local, ref matrix, out offset);
+            return Vector3I.Round(pad1local + offset);
         }
+
+        //private static Vector3 ConstraintPositionInGridSpace(IMyCubeBlock pad)
+        //{
+        //    return pad.Position * pad.CubeGrid.GridSize + pad.LocalMatrix.GetDirectionVector(DIR_FORWARD) * (pad.CubeGrid.GridSize * 0.5f);
+        //}
+
+        //public static void DebugDraw(IMyCubeGrid grid, Vector3I minPosition, Vector3I maxPosition, Color color, bool master)
+        //{
+        //    const float BOX_MODIFIER = 1.1f;
+        //    float gridSize = grid.GridSize;
+        //    Vector3 v1 = minPosition * gridSize - new Vector3(gridSize / 2f * BOX_MODIFIER);
+        //    Vector3 v2 = maxPosition * gridSize + new Vector3(gridSize / 2f * BOX_MODIFIER);
+
+        //    BoundingBoxD localbox = new BoundingBoxD(v1, v2);
+
+        //    MatrixD worldMatrix = grid.WorldMatrix;
+
+        //    color *= 0.75f;
+
+        //    if(master)
+        //    {
+        //        var lineMaterial = MyStringId.GetOrCompute("Square");
+        //        MySimpleObjectDraw.DrawTransparentBox(ref worldMatrix, ref localbox, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.1f, null, lineMaterial, false, -1, BlendTypeEnum.LDR);
+        //    }
+        //    else
+        //    {
+        //        var v1w = Vector3D.Transform(v1, worldMatrix);
+        //        var v2w = Vector3D.Transform(v2, worldMatrix);
+
+        //        MyTransparentGeometry.AddLineBillboard(MyStringId.GetOrCompute("WhiteDot"), color, v1w, (v2w - v1w), 1.05f, 0.25f, blendType: BlendTypeEnum.LDR);
+        //    }
+        //}
     }
 }
