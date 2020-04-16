@@ -175,6 +175,7 @@ namespace Digi.AdvancedWelding
             if(toolStatus == null)
                 toolStatus = MyAPIGateway.Utilities.CreateNotification("");
 
+            toolStatus.Hide(); // required since SE v1.194
             toolStatus.Font = font;
             toolStatus.Text = text;
             toolStatus.AliveTime = aliveTime;

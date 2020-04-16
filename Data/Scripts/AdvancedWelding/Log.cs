@@ -401,6 +401,7 @@ namespace Digi
                         }
                         else
                         {
+                            notify.Hide(); // required since SE v1.194
                             notify.Text = printText;
                             notify.AliveTime = printTime;
                             notify.ResetAliveTime();

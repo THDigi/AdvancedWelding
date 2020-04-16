@@ -86,6 +86,7 @@ namespace Digi.AdvancedWelding
                 }
                 else
                 {
+                    toolStatus.Hide(); // required since SE v1.194
                     toolStatus.Font = font;
                     toolStatus.Text = text;
                     toolStatus.AliveTime = aliveTime;
