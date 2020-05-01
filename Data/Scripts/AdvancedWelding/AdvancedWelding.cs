@@ -59,6 +59,7 @@ namespace Digi.AdvancedWelding
             if(Networking.IsServer)
             {
                 SetUpdateOrder(MyUpdateOrder.AfterSimulation);
+                CleanupNoPhysGrids();
             }
         }
 
@@ -82,6 +83,32 @@ namespace Digi.AdvancedWelding
 
             Instance = null;
             Log.Close();
+        }
+
+        private void CleanupNoPhysGrids()
+        {
+            foreach(var ent in MyEntities.GetEntities())
+            {
+                var grid = ent as MyCubeGrid;
+
+                if(grid == null || grid.IsPreview || grid.BlocksCount > 1) // no 'grid.Physics == null' check because it IS null for this kind of grid
+                    continue;
+
+                var customName = ((IMyCubeGrid)grid).CustomName;
+
+                if(!customName.StartsWith(DetachPacket.NAME_PREFIX))
+                    continue; // only care about this mods' mistakes xD
+
+                foreach(var block in grid.GetFatBlocks())
+                {
+                    if(!block.BlockDefinition.HasPhysics || !block.BlockDefinition.IsStandAlone)
+                    {
+                        Log.Info($"{customName} ({grid.EntityId.ToString()}) was removed because it only had 1 no-phys/no-standalone block and its grid name started with '{DetachPacket.NAME_PREFIX}'.");
+                        grid.Close();
+                        break;
+                    }
+                }
+            }
         }
 
         public override void UpdateAfterSimulation()

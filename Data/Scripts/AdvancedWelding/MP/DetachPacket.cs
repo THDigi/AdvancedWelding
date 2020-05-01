@@ -15,6 +15,9 @@ namespace Digi.AdvancedWelding.MP
     [ProtoContract]
     public class DetachPacket : PacketBase
     {
+        public const string NAME_PREFIX = "(Detached ";
+        public const string NAME_SUFFIX = ")";
+
         public DetachPacket() { } // Empty constructor required for deserialization
 
         [ProtoMember(1)]
@@ -72,7 +75,7 @@ namespace Digi.AdvancedWelding.MP
                 includeSender = false;
 
                 var blockName = ((MyCubeBlockDefinition)slimBlock.BlockDefinition).DisplayNameText;
-                var gridName = $"(Detached {blockName})";
+                var gridName = NAME_PREFIX + blockName + NAME_SUFFIX;
                 var blockOb = slimBlock.GetObjectBuilder();
 
                 var gridOb = CreateNewGridOB(grid, blockOb, gridName);

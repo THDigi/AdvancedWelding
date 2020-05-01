@@ -126,6 +126,13 @@ namespace Digi.AdvancedWelding
                 }
 
                 var blockDef = (MyCubeBlockDefinition)slimBlock.BlockDefinition;
+
+                if(!blockDef.HasPhysics || !blockDef.IsStandAlone)
+                {
+                    SetToolStatus($"{DETACH_MODE_PREFIX}Block has no collisions or not standalone, can't detach.", MyFontEnum.Red);
+                    return;
+                }
+
                 var buildRatio = slimBlock.BuildLevelRatio;
                 var criticalRatio = Math.Min(blockDef.CriticalIntegrityRatio + 0.1f, 1f); // +10% above critical integrity, capped to 100%.
 
