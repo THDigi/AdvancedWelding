@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Digi.AdvancedWelding.MP;
+using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
@@ -19,12 +20,20 @@ namespace Digi.AdvancedWelding
         private bool init = false;
         private bool detachCancelNotified = false;
 
+        public bool GrinderEquipped = false;
+        public bool DetachMode = false;
+        public bool Notified = false;
+
+        public IMyHudNotification ToolStatus;
+
         public readonly Networking Networking = new Networking(9472);
 
         public readonly List<IMyCubeBlock> Pads = new List<IMyCubeBlock>();
         public readonly List<MergeGrids> ToMerge = new List<MergeGrids>();
 
         public readonly List<IMySlimBlock> TmpBlocks = new List<IMySlimBlock>();
+
+        public MySoundPair DETACH_SOUND = new MySoundPair("PrgDeconstrPh01Start");
 
         public override void LoadData()
         {
@@ -39,8 +48,8 @@ namespace Digi.AdvancedWelding
 
             Networking.Register();
 
-            AngleGrinder.Notified = false;
-            AngleGrinder.DetachMode = false;
+            Notified = false;
+            DetachMode = false;
 
             if(Networking.IsPlayer)
             {
@@ -119,7 +128,7 @@ namespace Digi.AdvancedWelding
 
                 if(newGrid == null)
                 {
-                    Log.Error("Unable to merge!", Log.PRINT_MSG);
+                    Log.Error("Unable to merge!");
                 }
                 else
                 {
@@ -144,17 +153,17 @@ namespace Digi.AdvancedWelding
 
                 if(msg.StartsWith("/detach cancel", StringComparison.OrdinalIgnoreCase))
                 {
-                    if(AngleGrinder.DetachMode)
+                    if(DetachMode)
                     {
-                        AngleGrinder.DetachMode = false;
+                        DetachMode = false;
                         MyAPIGateway.Utilities.ShowMessage(Log.ModName, "Block detach mode turned off.");
                     }
                 }
                 else
                 {
-                    AngleGrinder.DetachMode = true;
+                    DetachMode = true;
 
-                    if(!AngleGrinder.IsEquipped)
+                    if(!GrinderEquipped)
                     {
                         AngleGrinder.SetToolStatus("Detach mode enabled, switch to your [Angle Grinder] to begin...", MyFontEnum.Blue, 5000);
                     }

@@ -23,11 +23,6 @@ namespace Digi.AdvancedWelding
 
         public bool thisLocallyEquipped = false;
 
-        public static bool IsEquipped = false;
-        public static bool DetachMode = false;
-        public static bool Notified = false;
-        private static IMyHudNotification toolStatus;
-
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
@@ -44,12 +39,12 @@ namespace Digi.AdvancedWelding
                     if(character.EquippedTool != null && character.EquippedTool.EntityId == Entity.EntityId)
                     {
                         thisLocallyEquipped = true;
-                        IsEquipped = true;
+                        AdvancedWelding.Instance.GrinderEquipped = true;
                         NeedsUpdate |= MyEntityUpdateEnum.EACH_10TH_FRAME;
 
-                        if(!Notified)
+                        if(!AdvancedWelding.Instance.Notified)
                         {
-                            Notified = true;
+                            AdvancedWelding.Instance.Notified = true;
                             SetToolStatus("You can detach blocks with [Ctrl] while grinding.", MyFontEnum.White, 5000);
                         }
                     }
@@ -68,12 +63,12 @@ namespace Digi.AdvancedWelding
                 if(thisLocallyEquipped)
                 {
                     thisLocallyEquipped = false;
-                    IsEquipped = false;
+                    AdvancedWelding.Instance.GrinderEquipped = false;
 
-                    if(DetachMode)
+                    if(AdvancedWelding.Instance.DetachMode)
                     {
                         SetToolStatus("Detach mode cancelled.", MyFontEnum.White, 1500);
-                        DetachMode = false;
+                        AdvancedWelding.Instance.DetachMode = false;
                     }
                 }
             }
@@ -90,7 +85,7 @@ namespace Digi.AdvancedWelding
                 if(!thisLocallyEquipped)
                     return;
 
-                bool detach = DetachMode;
+                bool detach = AdvancedWelding.Instance.DetachMode;
 
                 if(!detach)
                     detach = !(MyAPIGateway.Gui.IsCursorVisible || MyAPIGateway.Gui.ChatEntryVisible) && MyAPIGateway.Input.IsAnyCtrlKeyPressed();
@@ -104,7 +99,7 @@ namespace Digi.AdvancedWelding
                 if(casterComp == null)
                 {
                     SetToolStatus($"This grinder is modded to not be able to select blocks, can't be used for detaching.", MyFontEnum.Red, 3000);
-                    DetachMode = false;
+                    AdvancedWelding.Instance.DetachMode = false;
                     return;
                 }
 
@@ -137,7 +132,7 @@ namespace Digi.AdvancedWelding
                 // check shoot too because the block could already be under this build stage
                 if(!tool.IsShooting || buildRatio >= criticalRatio)
                 {
-                    SetToolStatus($"{DETACH_MODE_PREFIX}Grind below {(int)(criticalRatio * 100)}% to detach.", MyFontEnum.Blue);
+                    SetToolStatus($"{DETACH_MODE_PREFIX}Grind below {(criticalRatio * 100).ToString("0")}% to detach.", MyFontEnum.Blue);
                     return;
                 }
 
@@ -145,7 +140,7 @@ namespace Digi.AdvancedWelding
                 AdvancedWelding.Instance.Networking.SendToServer(packet);
 
                 SetToolStatus($"{blockDef.DisplayNameText} detached!", MyFontEnum.Green, 3000);
-                DetachMode = false;
+                AdvancedWelding.Instance.DetachMode = false;
                 PlayDetachSound(slimBlock);
             }
             catch(Exception e)
@@ -167,13 +162,15 @@ namespace Digi.AdvancedWelding
             var emitter = new MyEntity3DSoundEmitter(null);
             emitter.CustomVolume = 0.4f;
             emitter.SetPosition(position);
-            emitter.PlaySingleSound(new MySoundPair("PrgDeconstrPh01Start"));
+            emitter.PlaySingleSound(AdvancedWelding.Instance.DETACH_SOUND);
         }
 
         public static void SetToolStatus(string text, string font = MyFontEnum.White, int aliveTime = TOOLSTATUS_TIMEOUT)
         {
+            var toolStatus = AdvancedWelding.Instance.ToolStatus;
+
             if(toolStatus == null)
-                toolStatus = MyAPIGateway.Utilities.CreateNotification("");
+                AdvancedWelding.Instance.ToolStatus = toolStatus = MyAPIGateway.Utilities.CreateNotification("");
 
             toolStatus.Hide(); // required since SE v1.194
             toolStatus.Font = font;
