@@ -76,9 +76,8 @@ namespace Digi.AdvancedWelding.MP
             worldMatrix.Translation += Vector3D.TransformNormal(offset * (scale * 0.5f), worldMatrix);
 
             MyParticleEffect effect;
-            if(MyParticlesManager.TryCreateParticleEffect("WelderContactPoint_soft", ref worldMatrix, ref worldPos, uint.MaxValue, out effect))
+            if(MyParticlesManager.TryCreateParticleEffect("AdvancedWelding_Weld", ref worldMatrix, ref worldPos, uint.MaxValue, out effect))
             {
-                effect.Loop = false;
                 effect.UserScale = scale;
             }
         }
