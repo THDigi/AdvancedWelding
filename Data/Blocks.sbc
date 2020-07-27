@@ -33,6 +33,9 @@
       <BuildTimeSeconds>5</BuildTimeSeconds>
       <DamageEffectId>212</DamageEffectId>
       <DamagedSound>ParticleHeavyMech</DamagedSound>
+      <IsAirTight>false</IsAirTight>
+      <IsStandAlone>false</IsStandAlone>
+      <HasPhysics>false</HasPhysics>
     </Definition>
 
     <Definition>
@@ -66,6 +69,9 @@
       <BuildTimeSeconds>7</BuildTimeSeconds>
       <DamageEffectId>212</DamageEffectId>
       <DamagedSound>ParticleHeavyMech</DamagedSound>
+      <IsAirTight>false</IsAirTight>
+      <IsStandAlone>false</IsStandAlone>
+      <HasPhysics>false</HasPhysics>
     </Definition>
 
   </CubeBlocks>
