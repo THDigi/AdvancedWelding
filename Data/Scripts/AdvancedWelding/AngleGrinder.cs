@@ -169,7 +169,7 @@ namespace Digi.AdvancedWelding
             var emitter = new MyEntity3DSoundEmitter(null);
             emitter.CustomVolume = 0.4f;
             emitter.SetPosition(position);
-            emitter.PlaySingleSound(AdvancedWelding.Instance.DETACH_SOUND);
+            emitter.PlaySingleSound(AdvancedWelding.Instance.DetachSound);
         }
 
         public static void SetToolStatus(string text, string font = MyFontEnum.White, int aliveTime = TOOLSTATUS_TIMEOUT)

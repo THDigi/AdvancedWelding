@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using Digi.AdvancedWelding.MP;
+using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
+using VRage.Utils;
 using VRageMath;
+using BlendTypeEnum = VRageRender.MyBillboard.BlendTypeEnum;
 
 namespace Digi.AdvancedWelding
 {
@@ -29,12 +32,15 @@ namespace Digi.AdvancedWelding
         public readonly Networking Networking = new Networking(9472);
 
         public readonly List<IMyCubeBlock> Pads = new List<IMyCubeBlock>();
-        public readonly List<MergeGrids> ToMerge = new List<MergeGrids>();
+        public readonly List<WeldPad> PadDraw = new List<WeldPad>();
 
-        public readonly List<IMySlimBlock> TmpBlocks = new List<IMySlimBlock>();
+        public readonly List<MergeGrids> ToMerge = new List<MergeGrids>();
+        private readonly List<MergedPair> Merged = new List<MergedPair>();
+
         public readonly List<IMyCubeGrid> TmpGrids = new List<IMyCubeGrid>();
 
-        public MySoundPair DETACH_SOUND = new MySoundPair("PrgDeconstrPh01Start");
+        public readonly MySoundPair DetachSound = new MySoundPair("PrgDeconstrPh01Start");
+        public readonly MyStringId LineMaterial = MyStringId.GetOrCompute("WeaponLaser");
 
         public override void LoadData()
         {
@@ -127,16 +133,32 @@ namespace Digi.AdvancedWelding
 
         private void ProcessMergeQueue()
         {
-            if(ToMerge.Count == 0 || !Networking.IsServer)
+            if(!Networking.IsServer)
                 return;
+
+            if(ToMerge.Count == 0)
+            {
+                Merged.Clear();
+                return;
+            }
 
             for(int i = ToMerge.Count - 1; i >= 0; --i)
             {
                 MergeGrids merge = ToMerge[i];
 
-                if(merge.Pad1.CubeGrid == merge.Pad2.CubeGrid) // already got merged by other means
+                // already got merged by other means... but doesn't actually work properly, so that's why the next one exists.
+                if(merge.Pad1.CubeGrid == merge.Pad2.CubeGrid)
                 {
                     ToMerge.RemoveAtFast(i);
+                    //Log.Info("a pair of weldpads was already merged, skipping");
+                    continue;
+                }
+
+                MergedPair pair = new MergedPair(merge.Pad1.CubeGrid, merge.Pad2.CubeGrid);
+                if(Merged.Contains(pair))
+                {
+                    ToMerge.RemoveAtFast(i);
+                    //Log.Info("a pair of weldpads was already merged (solution 2), skipping");
                     continue;
                 }
 
@@ -163,6 +185,8 @@ namespace Digi.AdvancedWelding
                     Vector3 effectPos = matrixForEffects.Translation;
                     Quaternion effectOrientation = Quaternion.CreateFromRotationMatrix(matrixForEffects);
                     WeldEffectsPacket packet = new WeldEffectsPacket(newGrid.EntityId, effectPos, effectOrientation);
+
+                    Merged.Add(pair);
 
                     Networking.RelayToClients(packet, true);
                 }
@@ -200,6 +224,59 @@ namespace Digi.AdvancedWelding
                         MyAPIGateway.Utilities.ShowMessage(Log.ModName, "To cancel this mode just holster your grinder or type /detach cancel");
                     }
                 }
+            }
+        }
+
+        public override void Draw()
+        {
+            try
+            {
+                if(PadDraw.Count == 0)
+                    return;
+
+                const float DepthRatio = 0.05f;
+                const float LineWidth = 0.02f * DepthRatio;
+
+                Color color = Color.Red * 0.5f;
+                MatrixD camMatrix = MyAPIGateway.Session.Camera.WorldMatrix;
+
+                for(int i = (PadDraw.Count - 1); i >= 0; i--)
+                {
+                    WeldPad pad = PadDraw[i];
+
+                    if(pad.BlocksInTheWay.Count == 0)
+                    {
+                        PadDraw.RemoveAtFast(i);
+                        return;
+                    }
+
+                    if(!pad.SeeWeldPadInfo())
+                        continue;
+
+                    foreach(IMySlimBlock block in pad.BlocksInTheWay)
+                    {
+                        MyCubeBlockDefinition def = (MyCubeBlockDefinition)block.BlockDefinition;
+
+                        Matrix localMatrix;
+                        block.Orientation.GetMatrix(out localMatrix);
+                        localMatrix.Translation = new Vector3(block.Position) * block.CubeGrid.GridSize;
+                        MatrixD worldMatrix = localMatrix * block.CubeGrid.WorldMatrix;
+
+                        Vector3 halfSize = def.Size * (block.CubeGrid.GridSize / 2);
+                        BoundingBoxD localBB = new BoundingBoxD(-halfSize, halfSize);
+
+                        // for always-on-top draw
+                        Vector3D center = camMatrix.Translation + ((worldMatrix.Translation - camMatrix.Translation) * DepthRatio);
+                        MatrixD.Rescale(ref worldMatrix, DepthRatio);
+                        worldMatrix.Translation = center;
+
+                        MySimpleObjectDraw.DrawTransparentBox(ref worldMatrix, ref localBB, ref color, MySimpleObjectRasterizer.Wireframe, 1, LineWidth, lineMaterial: LineMaterial, blendType: BlendTypeEnum.PostPP);
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
             }
         }
     }

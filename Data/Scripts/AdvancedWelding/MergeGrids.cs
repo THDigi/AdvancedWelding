@@ -1,4 +1,5 @@
-﻿using VRage.Game.ModAPI;
+﻿using System;
+using VRage.Game.ModAPI;
 using VRageMath;
 
 namespace Digi.AdvancedWelding
@@ -19,6 +20,23 @@ namespace Digi.AdvancedWelding
             Pad2 = pad2;
             Pad1LocalMatrix = pad1.LocalMatrix;
             Pad2LocalMatrix = pad2.LocalMatrix;
+        }
+    }
+
+    public struct MergedPair : IEquatable<MergedPair>
+    {
+        public readonly IMyCubeGrid GridA;
+        public readonly IMyCubeGrid GridB;
+
+        public MergedPair(IMyCubeGrid gridA, IMyCubeGrid gridB)
+        {
+            GridA = gridA;
+            GridB = gridB;
+        }
+
+        public bool Equals(MergedPair other)
+        {
+            return (GridA == other.GridA || GridA == other.GridB) && (GridB == other.GridA || GridB == other.GridB);
         }
     }
 }
