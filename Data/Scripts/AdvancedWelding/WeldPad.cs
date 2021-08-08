@@ -361,7 +361,7 @@ namespace Digi.AdvancedWelding
             return false;
         }
 
-        private MyCubeGrid GetMergeParent(MyCubeGrid grid1, MyCubeGrid grid2)
+        private static MyCubeGrid GetMergeParent(MyCubeGrid grid1, MyCubeGrid grid2)
         {
             bool g1rooted = IsRooted(grid1);
             bool g2rooted = IsRooted(grid2);
@@ -378,23 +378,33 @@ namespace Digi.AdvancedWelding
             return grid2;
         }
 
-        private bool IsRooted(IMyCubeGrid grid)
+        private static bool IsRooted(IMyCubeGrid grid)
         {
             if(grid.IsStatic)
                 return true;
 
-            var group = MyAPIGateway.GridGroups.GetGroup(grid, GridLinkTypeEnum.Physical);
+            List<IMyCubeGrid> grids = AdvancedWelding.Instance.TmpGrids;
+            grids.Clear();
 
-            if(group == null || group.Count == 1)
-                return false;
-
-            foreach(var g in group)
+            try
             {
-                if(g.IsStatic)
-                    return true;
-            }
+                MyAPIGateway.GridGroups.GetGroup(grid, GridLinkTypeEnum.Physical, grids);
 
-            return false;
+                if(grids.Count == 1)
+                    return false;
+
+                foreach(IMyCubeGrid g in grids)
+                {
+                    if(g.IsStatic)
+                        return true;
+                }
+
+                return false;
+            }
+            finally
+            {
+                grids.Clear();
+            }
         }
 
         public static IMyCubeGrid MergeGrids(IMyCubeBlock pad1, IMyCubeBlock pad2, bool checkOrder)

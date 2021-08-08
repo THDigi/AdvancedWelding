@@ -32,6 +32,7 @@ namespace Digi.AdvancedWelding
         public readonly List<MergeGrids> ToMerge = new List<MergeGrids>();
 
         public readonly List<IMySlimBlock> TmpBlocks = new List<IMySlimBlock>();
+        public readonly List<IMyCubeGrid> TmpGrids = new List<IMyCubeGrid>();
 
         public MySoundPair DETACH_SOUND = new MySoundPair("PrgDeconstrPh01Start");
 
@@ -89,13 +90,11 @@ namespace Digi.AdvancedWelding
         {
             foreach(var ent in MyEntities.GetEntities())
             {
-                var grid = ent as MyCubeGrid;
-
+                MyCubeGrid grid = ent as MyCubeGrid;
                 if(grid == null || grid.IsPreview || grid.BlocksCount > 1) // no 'grid.Physics == null' check because it IS null for this kind of grid
                     continue;
 
-                var customName = ((IMyCubeGrid)grid).CustomName;
-
+                string customName = ((IMyCubeGrid)grid).CustomName;
                 if(!customName.StartsWith(DetachPacket.NAME_PREFIX))
                     continue; // only care about this mods' mistakes xD
 
@@ -133,7 +132,7 @@ namespace Digi.AdvancedWelding
 
             for(int i = ToMerge.Count - 1; i >= 0; --i)
             {
-                var merge = ToMerge[i];
+                MergeGrids merge = ToMerge[i];
 
                 if(merge.Pad1.CubeGrid == merge.Pad2.CubeGrid) // already got merged by other means
                 {
@@ -145,7 +144,7 @@ namespace Digi.AdvancedWelding
                     continue;
 
                 Matrix matrixForEffects = merge.Pad1LocalMatrix;
-                var newGrid = WeldPad.MergeGrids(merge.Pad1, merge.Pad2, true);
+                IMyCubeGrid newGrid = WeldPad.MergeGrids(merge.Pad1, merge.Pad2, true);
 
                 if(newGrid == null)
                 {
@@ -161,9 +160,9 @@ namespace Digi.AdvancedWelding
                 {
                     Log.Info($"Merged to {newGrid}");
 
-                    var effectPos = matrixForEffects.Translation;
-                    var effectOrientation = Quaternion.CreateFromRotationMatrix(matrixForEffects);
-                    var packet = new WeldEffectsPacket(newGrid.EntityId, effectPos, effectOrientation);
+                    Vector3 effectPos = matrixForEffects.Translation;
+                    Quaternion effectOrientation = Quaternion.CreateFromRotationMatrix(matrixForEffects);
+                    WeldEffectsPacket packet = new WeldEffectsPacket(newGrid.EntityId, effectPos, effectOrientation);
 
                     Networking.RelayToClients(packet, true);
                 }
