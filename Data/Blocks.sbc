@@ -7,8 +7,10 @@
         <TypeId>TerminalBlock</TypeId>
         <SubtypeId>SmallWeldPad</SubtypeId>
       </Id>
+      <BlockPairName>WeldPad</BlockPairName>
       <DisplayName>Weld Pad</DisplayName>
       <Icon>Textures\Icons\WeldPad.dds</Icon>
+      <Description>Single-use slim pads that can merge 2 grids without extra space required.</Description>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
@@ -27,7 +29,6 @@
       <MountPoints>
         <MountPoint Side="Bottom" StartX="0.0" StartY="0.0" EndX="1.0" EndY="1.0" />
       </MountPoints>
-      <BlockPairName>WeldPad</BlockPairName>
       <MirroringX>Y</MirroringX>
       <EdgeType>Light</EdgeType>
       <BuildTimeSeconds>5</BuildTimeSeconds>
@@ -43,8 +44,10 @@
         <TypeId>TerminalBlock</TypeId>
         <SubtypeId>LargeWeldPad</SubtypeId>
       </Id>
+      <BlockPairName>WeldPad</BlockPairName>
       <DisplayName>Weld Pad</DisplayName>
       <Icon>Textures\Icons\WeldPad.dds</Icon>
+      <Description>Single-use slim pads that can merge 2 grids without extra space required.</Description>
       <CubeSize>Large</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
@@ -63,7 +66,6 @@
       <MountPoints>
         <MountPoint Side="Bottom" StartX="0.0" StartY="0.0" EndX="1.0" EndY="1.0" />
       </MountPoints>
-      <BlockPairName>WeldPad</BlockPairName>
       <MirroringX>Y</MirroringX>
       <EdgeType>Light</EdgeType>
       <BuildTimeSeconds>7</BuildTimeSeconds>

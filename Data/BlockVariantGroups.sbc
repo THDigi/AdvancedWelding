@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <BlockVariantGroups>
+    <BlockVariantGroup>
+      <Id Type="MyObjectBuilder_BlockVariantGroup" Subtype="WeldPads" />
+      <Icon>Textures\Icons\WeldPad.dds</Icon>
+      <DisplayName>Weld Pads</DisplayName>
+      <Description>Single-use slim pads that can merge 2 grids without extra space required.</Description>
+      <Blocks>
+        <Block Type="MyObjectBuilder_TerminalBlock" Subtype="LargeWeldPad" />
+        <Block Type="MyObjectBuilder_TerminalBlock" Subtype="SmallWeldPad" />
+      </Blocks>
+    </BlockVariantGroup>
+  </BlockVariantGroups>
+</Definitions>
