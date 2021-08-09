@@ -27,6 +27,7 @@ namespace Digi.AdvancedWelding
         private IMyHudNotification toolStatus;
 
         public readonly List<IMySlimBlock> BlocksInTheWay = new List<IMySlimBlock>(0);
+        public readonly List<IMySlimBlock> DeleteWeldPads = new List<IMySlimBlock>(0);
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
@@ -126,6 +127,7 @@ namespace Digi.AdvancedWelding
             try
             {
                 BlocksInTheWay.Clear();
+                DeleteWeldPads.Clear();
 
                 if(AdvancedWelding.Instance.Pads.Count <= 1)
                     return;
@@ -231,7 +233,7 @@ namespace Digi.AdvancedWelding
 
                 if(dist <= 0 && axisDot == -1.0 && rollDot == 1.0)
                 {
-                    if(!CanMergeCubes(pad, otherPad, CalculateOffset(pad, otherPad), BlocksInTheWay))
+                    if(!CanMergeCubes(pad, otherPad, CalculateOffset(pad, otherPad), BlocksInTheWay, DeleteWeldPads))
                     {
                         //bool otherWeldPadsInTheWay = false;
                         //foreach(IMySlimBlock block in DrawInTheWay)
@@ -278,18 +280,10 @@ namespace Digi.AdvancedWelding
                         otherGrid.RemoveBlock(otherPad.SlimBlock);
 
                         // remove other weldpads that get in the way
-                        foreach(IMySlimBlock block in BlocksInTheWay)
+                        foreach(IMySlimBlock block in DeleteWeldPads)
                         {
-                            if(IsWeldPad(block.BlockDefinition.Id))
-                            {
-                                block.CubeGrid.RemoveBlock(block);
-                                Log.Info($"   removed weldpad that was in the way at {block.Position.ToString()} on {block.CubeGrid.ToString()}");
-                            }
-                            // not really a problem...
-                            //else
-                            //{
-                            //    Log.Error("Unexpected non-weldpad block in the BlocksInTheWay! please report with the grids used for the merge.");
-                            //}
+                            block.CubeGrid.RemoveBlock(block);
+                            Log.Info($"   removed weldpad that was in the way at {block.Position.ToString()} on {block.CubeGrid.ToString()}");
                         }
                     }
 
@@ -299,8 +293,6 @@ namespace Digi.AdvancedWelding
 
                     otherPad = null;
                     master = false;
-
-                    BlocksInTheWay.Clear();
 
                     SetToolStatus("WeldPad: Succesfully merged", MyFontEnum.Green, 1000);
                 }
@@ -335,7 +327,7 @@ namespace Digi.AdvancedWelding
             }
         }
 
-        private static bool CanMergeCubes(IMyCubeBlock padA, IMyCubeBlock padB, Vector3I gridOffset, List<IMySlimBlock> blocksOverlapping)
+        private static bool CanMergeCubes(IMyCubeBlock padA, IMyCubeBlock padB, Vector3I gridOffset, List<IMySlimBlock> blocksOverlapping, List<IMySlimBlock> weldPadsOverlapping)
         {
             blocksOverlapping.Clear();
             try
@@ -376,14 +368,21 @@ namespace Digi.AdvancedWelding
                         //result = false;
                         //continue;
 
-                        blocksOverlapping.Add(slimGridA);
-                        blocksOverlapping.Add(slimGridB);
+                        bool isWeldPadA = IsWeldPad(slimGridA.BlockDefinition.Id);
+                        bool isWeldPadB = IsWeldPad(slimGridB.BlockDefinition.Id);
 
-                        if(IsWeldPad(slimGridA.BlockDefinition.Id) || IsWeldPad(slimGridB.BlockDefinition.Id))
+                        if(isWeldPadA || isWeldPadB)
                         {
+                            if(isWeldPadA)
+                                weldPadsOverlapping.Add(slimGridA);
+
+                            if(isWeldPadB)
+                                weldPadsOverlapping.Add(slimGridB);
                         }
                         else
                         {
+                            blocksOverlapping.Add(slimGridA);
+                            blocksOverlapping.Add(slimGridB);
                             result = false;
                         }
 
@@ -403,7 +402,7 @@ namespace Digi.AdvancedWelding
             return false;
         }
 
-        private static bool IsWeldPad(MyDefinitionId defId)
+        public static bool IsWeldPad(MyDefinitionId defId)
         {
             if(defId.TypeId == typeof(MyObjectBuilder_TerminalBlock))
             {
