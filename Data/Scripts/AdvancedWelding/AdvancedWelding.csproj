@@ -112,14 +112,23 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AdvancedWelding.cs" />
-    <Compile Include="AngleGrinder.cs" />
+    <Compile Include="AdvancedWeldingMod.cs" />
+    <Compile Include="GrindDamageHandler.cs" />
+    <Compile Include="Notifications.cs" />
+    <Compile Include="PrecisionHandler.cs" />
+    <Compile Include="DetachHandler.cs" />
+    <Compile Include="ChatCommands.cs" />
+    <Compile Include="DetachEffectsPacket.cs" />
+    <Compile Include="WeldEffectsPacket.cs" />
+    <Compile Include="WeldPadHandler.cs" />
+    <Compile Include="GrinderHandler.cs" />
+    <Compile Include="Libraries\Networking\_CopyToMod.cs" />
     <Compile Include="Log.cs" />
-    <Compile Include="MergeGrids.cs" />
-    <Compile Include="MP\WeldEffectsPacket.cs" />
-    <Compile Include="MP\Networking.cs" />
-    <Compile Include="MP\PacketBase.cs" />
-    <Compile Include="MP\DetachPacket.cs" />
+    <Compile Include="ComponentBase.cs" />
+    <Compile Include="MergeHandler.cs" />
+    <Compile Include="RegisterPackets.cs" />
+    <Compile Include="Libraries\Networking\Networking.cs" />
+    <Compile Include="Libraries\Networking\PacketBase.cs" />
     <Compile Include="WeldPad.cs" />
   </ItemGroup>
   <ItemGroup>

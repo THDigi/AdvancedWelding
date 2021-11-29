@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <BlockPositions>
+    <BlockPosition>
+      <Name>WeldPad</Name>
+      <Position>
+        <X>-1</X>
+        <Y>15</Y>
+      </Position>
+    </BlockPosition>
+  </BlockPositions>
   <CubeBlocks>
-
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
@@ -38,7 +46,6 @@
       <IsStandAlone>false</IsStandAlone>
       <HasPhysics>false</HasPhysics>
     </Definition>
-
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
@@ -75,6 +82,5 @@
       <IsStandAlone>false</IsStandAlone>
       <HasPhysics>false</HasPhysics>
     </Definition>
-
   </CubeBlocks>
 </Definitions>
