@@ -66,6 +66,8 @@ namespace Digi.AdvancedWelding
                 Server_PrecisionData = new Dictionary<ulong, PrecisionData>();
 
                 Main.GrindDamageHandler.GrindingBlock += Server_GrindingBlock;
+                Main.GrindDamageHandler.GrindingFloatingObject += Server_GrindingFloatingObject;
+
                 PrecisionPacket.OnReceive += Server_PacketReceived;
                 MyVisualScriptLogicProvider.PlayerDisconnected += Server_PlayerDisconnected;
             }
@@ -113,6 +115,16 @@ namespace Digi.AdvancedWelding
             {
                 info.Amount = 0; // prevent grinding untargetted block
             }
+        }
+
+        void Server_GrindingFloatingObject(IMyFloatingObject floatingObject, ref MyDamageInformation info, ulong attackerSteamId)
+        {
+            PrecisionData data;
+            if(!Server_PrecisionData.TryGetValue(attackerSteamId, out data) || data.GridEntId == 0)
+                return;
+
+            // prevent all floating object damage while in precision mode
+            info.Amount = 0;
         }
 
         void Local_EquippedGrinderChanged(IMyAngleGrinder grinder)
