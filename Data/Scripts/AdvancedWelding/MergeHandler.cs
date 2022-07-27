@@ -122,7 +122,7 @@ namespace Digi.AdvancedWelding
                     Vector3 effectLocalPos = matrixForEffects.Translation;
                     Quaternion effectLocalOrientation = Quaternion.CreateFromRotationMatrix(matrixForEffects);
                     WeldEffectsPacket packet = new WeldEffectsPacket(newGrid.EntityId, effectLocalPos, effectLocalOrientation);
-                    Main.Networking.SendToOthers(packet);
+                    Main.Networking.SendToServer(packet);
                 }
 
                 ScheduledMerge.RemoveAtFast(i);

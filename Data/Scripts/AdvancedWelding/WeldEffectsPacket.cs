@@ -33,6 +33,8 @@ namespace Digi.AdvancedWelding
 
         public override void Received(ref RelayMode relay, ulong senderSteamId)
         {
+            relay = RelayMode.RelayOriginal;
+
             if(!Networking.IsPlayer)
                 return;
 
