@@ -11,7 +11,7 @@ namespace Digi.AdvancedWelding
     {
         const string HelpText = "This mod adds a few features to Hand Grinder as well as a Weld Pad block (for both small and large)." +
             "\n" +
-            "\nTo detach a block, equip a Hand Grinder and hold CTRL then grind a block (does not grind off components)." + // TODO: gamepad bind?
+            "\nTo detach a block, equip a Hand Grinder and hold CTRL or LeftBumper then grind a block (does not grind off components)." +
             "\n" +
             "\nTo grind only the aimed block without accidentally grinding other blocks after it's done, hold SecondaryAction while grinding." +
             "\n" +

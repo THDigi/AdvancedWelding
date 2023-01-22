@@ -8,9 +8,11 @@ using Sandbox.ModAPI;
 using Sandbox.ModAPI.Weapons;
 using VRage.Game;
 using VRage.Game.ModAPI;
+using VRage.Input;
 using VRage.Utils;
 using VRageMath;
 using BlendTypeEnum = VRageRender.MyBillboard.BlendTypeEnum;
+using IAltControllableEntity = Sandbox.Game.Entities.IMyControllableEntity;
 
 namespace Digi.AdvancedWelding
 {
@@ -36,6 +38,9 @@ namespace Digi.AdvancedWelding
     // Server and client side
     public class PrecisionHandler : ComponentBase, IUpdatable
     {
+        // NOTE: if one changes this, should also edit ChatCommands.HelpText
+        static readonly MyStringId ControlForAction = MyControlsSpace.SECONDARY_TOOL_ACTION;
+
         public class PrecisionData
         {
             public long GridEntId;
@@ -144,19 +149,38 @@ namespace Digi.AdvancedWelding
                 return;
 
             bool inputReadable = !MyAPIGateway.Gui.IsCursorVisible && !MyAPIGateway.Gui.ChatEntryVisible;
+            bool heldPressed = false;
+            bool newReleased = false;
 
-            if(TargetBlock == null && inputReadable && MyAPIGateway.Input.IsGameControlPressed(MyControlsSpace.SECONDARY_TOOL_ACTION))
+            if(inputReadable)
+            {
+                if(MyAPIGateway.Input.IsJoystickLastUsed)
+                {
+                    IAltControllableEntity ctrlEnt = (IAltControllableEntity)MyAPIGateway.Session.ControlledObject;
+                    IMyControllerControl control = MyAPIGateway.Input.GetControl(ctrlEnt.ControlContext, ControlForAction);
+                    IMyControllerControl controlAux = MyAPIGateway.Input.GetControl(ctrlEnt.AuxiliaryContext, ControlForAction);
+
+                    heldPressed = (control?.IsPressed() ?? false) || (controlAux?.IsPressed() ?? false);
+                    newReleased = (control?.IsNewReleased() ?? false) || (controlAux?.IsNewReleased() ?? false);
+                }
+                else
+                {
+                    heldPressed = MyAPIGateway.Input.IsGameControlPressed(ControlForAction);
+                    newReleased = MyAPIGateway.Input.IsNewGameControlReleased(ControlForAction);
+                }
+            }
+
+            if(TargetBlock == null && inputReadable && heldPressed)
             {
                 MyCasterComponent casterComp = grinder?.Components?.Get<MyCasterComponent>();
                 IMySlimBlock target = casterComp?.HitBlock as IMySlimBlock;
-
                 if(target != null)
                 {
                     SetLocalTarget(target);
                 }
             }
 
-            if(TargetBlock != null && (!inputReadable || MyAPIGateway.Input.IsNewGameControlReleased(MyControlsSpace.SECONDARY_TOOL_ACTION)))
+            if(TargetBlock != null && (!inputReadable || newReleased))
             {
                 SetLocalTarget(null);
             }

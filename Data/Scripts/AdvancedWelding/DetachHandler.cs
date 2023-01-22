@@ -12,7 +12,6 @@ using VRage;
 using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.Input;
-using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRageMath;
 
@@ -74,6 +73,10 @@ namespace Digi.AdvancedWelding
     public class DetachHandler : ComponentBase, IUpdatable
     {
         const float GrinderCooldownMs = 250; // from MyAngleGrinder constructor calling base constructor.
+
+        // NOTE: if one changes these, edit ChatCommands.HelpText aswell.
+        const MyKeys DetachModeKey = MyKeys.Control;
+        const MyJoystickButtonsEnum DetachModeButton = MyJoystickButtonsEnum.J05; // left bumper which is a modifier just like ctrl is
 
         DetachModePacket ModePacket;
         DetachProgressPacket ProgressPacket;
@@ -143,7 +146,10 @@ namespace Digi.AdvancedWelding
             if(grinder == null)
                 return;
 
-            bool shouldDetach = !MyAPIGateway.Gui.IsCursorVisible && !MyAPIGateway.Gui.ChatEntryVisible && MyAPIGateway.Input.IsKeyPress(MyKeys.Control);
+            bool shouldDetach = !MyAPIGateway.Gui.IsCursorVisible
+                             && !MyAPIGateway.Gui.ChatEntryVisible
+                             && (MyAPIGateway.Input.IsKeyPress(DetachModeKey) || MyAPIGateway.Input.IsJoystickButtonPressed(DetachModeButton));
+
             if(shouldDetach != Local_DetachData.DetachMode)
             {
                 SetLocalDetach(shouldDetach);
