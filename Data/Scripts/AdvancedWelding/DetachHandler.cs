@@ -232,6 +232,9 @@ namespace Digi.AdvancedWelding
 
         void Server_GrindingBlock(IMySlimBlock block, ref MyDamageInformation info, IMyAngleGrinder grinder, ulong attackerSteamId)
         {
+            if(info.Amount <= 0)
+                return; // already cancelled by something else, like precision mode, ignore.
+
             DetachData data = Server_DetachData.GetValueOrDefault(attackerSteamId);
             if(data == null || !data.DetachMode)
                 return;

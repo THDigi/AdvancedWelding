@@ -36,8 +36,8 @@ namespace Digi.AdvancedWelding
             Networking.LogException = (ex) => Log.Error(ex);
             Networking.Register(ModContext);
 
-            DetachHandler = new DetachHandler(this);
             PrecisionHandler = new PrecisionHandler(this);
+            DetachHandler = new DetachHandler(this);
             WeldPadHandler = new WeldPadHandler(this);
             MergeHandler = new MergeHandler(this);
 
