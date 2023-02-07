@@ -51,7 +51,11 @@ namespace Digi.AdvancedWelding
             if(MyAPIGateway.Session.IsServer)
             {
                 GrindDamageHandler = new GrindDamageHandler(this);
+
+                new FixDeformation(this);
             }
+
+            //new Debug(this);
         }
 
         public override void BeforeStart()

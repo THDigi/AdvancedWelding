@@ -113,6 +113,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AdvancedWeldingMod.cs" />
+    <Compile Include="FixDeformation.cs" />
+    <Compile Include="Debug.cs" />
     <Compile Include="GrindDamageHandler.cs" />
     <Compile Include="Notifications.cs" />
     <Compile Include="PrecisionHandler.cs" />

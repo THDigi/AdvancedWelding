@@ -329,22 +329,19 @@ namespace Digi.AdvancedWelding
 
             MyCubeBlockDefinition blockDef = (MyCubeBlockDefinition)block.BlockDefinition;
             string blockName = blockDef.DisplayNameText;
-            string gridName = $"(Detached {blockName})";
 
             IMyCubeGrid detachFrom = block.CubeGrid;
+            MyCubeGrid detachFromInternal = (MyCubeGrid)detachFrom;
 
-            MyObjectBuilder_CubeBlock blockOb = block.GetObjectBuilder();
-            MyObjectBuilder_CubeGrid gridOb = CreateNewGridOB(block.CubeGrid, blockOb, gridName);
-
-            block.CubeGrid.RemoveBlock(block, true);
-
-            MyCubeGrid createdGrid = MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(gridOb) as MyCubeGrid;
+            MyCubeGrid createdGrid = MyCubeGrid.CreateSplit(detachFromInternal, HaxSlimList(detachFromInternal.CubeBlocks, block), true);
             if(createdGrid == null)
             {
-                Log.Error($"Failed to create a new grid! obj={gridOb}; new entId={gridOb.EntityId.ToString()}");
+                Log.Error($"Failed to create a new grid!");
                 MyVisualScriptLogicProvider.SendChatMessageColored($"Failed to create detached block grid!", Color.Red, Log.ModName, grinder.OwnerIdentityId, MyFontEnum.Debug);
                 return;
             }
+
+            createdGrid.DisplayName = $"(Detached {blockName})";
 
             Log.Info($"Detached '{blockName}' from '{detachFrom.CustomName}' ({detachFrom.EntityId.ToString()}); new grid id={createdGrid.EntityId.ToString()}");
 
@@ -353,80 +350,11 @@ namespace Digi.AdvancedWelding
             AdvancedWeldingMod.Instance.Networking.SendToServer(packet);
         }
 
-        static MyObjectBuilder_CubeGrid CreateNewGridOB(IMyCubeGrid grid, MyObjectBuilder_CubeBlock blockOb, string gridName)
+        static List<T> HaxSlimList<T>(HashSet<T> objTypeRef, IMySlimBlock block)
         {
-            MyCubeGrid internalGrid = (MyCubeGrid)grid;
-            MyObjectBuilder_CubeGrid gridOb = null;
-
-            int blockCount = internalGrid.BlocksCount;
-            if(blockCount > 1000)
-            {
-                gridOb = FastGridOBClone(internalGrid, blockOb, gridName);
-            }
-            else
-            {
-                gridOb = (MyObjectBuilder_CubeGrid)grid.GetObjectBuilder();
-                gridOb.DisplayName = gridName;
-                gridOb.IsStatic = false;
-                gridOb.ConveyorLines = null;
-
-                if(gridOb.OxygenAmount != null && gridOb.OxygenAmount.Length > 0)
-                    gridOb.OxygenAmount = new float[0];
-
-                if(gridOb.BlockGroups != null)
-                    gridOb.BlockGroups.Clear();
-
-                gridOb.CubeBlocks.Clear();
-                gridOb.CubeBlocks.Add(blockOb);
-            }
-
-            MyAPIGateway.Entities.RemapObjectBuilder(gridOb);
-
-            return gridOb;
-        }
-
-        static MyObjectBuilder_CubeGrid FastGridOBClone(MyCubeGrid grid, MyObjectBuilder_CubeBlock blockOb, string gridName)
-        {
-            MyObjectBuilder_CubeGrid gridOb = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_CubeGrid>();
-
-            gridOb.DisplayName = gridName;
-            gridOb.Name = null;
-            gridOb.GridSizeEnum = grid.GridSizeEnum;
-            gridOb.PersistentFlags = grid.Render.PersistentFlags;
-            gridOb.ComponentContainer = grid.Components.Serialize(true);
-            gridOb.PositionAndOrientation = new MyPositionAndOrientation(grid.WorldMatrix);
-
-            gridOb.IsStatic = false;
-            gridOb.IsUnsupportedStation = false;
-            gridOb.IsRespawnGrid = false;
-
-            gridOb.Editable = grid.Editable;
-            gridOb.Immune = grid.Immune;
-            gridOb.DestructibleBlocks = grid.DestructibleBlocks;
-            gridOb.GridGeneralDamageModifier = grid.GridGeneralDamageModifier;
-            gridOb.LocalCoordSys = grid.LocalCoordSystem;
-
-            if(gridOb.CubeBlocks == null)
-                gridOb.CubeBlocks = new List<MyObjectBuilder_CubeBlock>(1);
-            else
-                gridOb.CubeBlocks.Clear();
-
-            gridOb.CubeBlocks.Add(blockOb);
-
-            if(gridOb.BlockGroups == null)
-                gridOb.BlockGroups = new List<MyObjectBuilder_BlockGroup>(0);
-
-            if(gridOb.ConveyorLines == null)
-                gridOb.ConveyorLines = new List<MyObjectBuilder_ConveyorLine>(0);
-
-            gridOb.CreatePhysics = grid.Physics != null;
-            if(grid.Physics != null)
-            {
-                gridOb.LinearVelocity = grid.Physics.LinearVelocity;
-                gridOb.AngularVelocity = grid.Physics.AngularVelocity;
-            }
-
-            return gridOb;
+            List<T> list = new List<T>(1);
+            list.Add((T)block);
+            return list;
         }
     }
 }

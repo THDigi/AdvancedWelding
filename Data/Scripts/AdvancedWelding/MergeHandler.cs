@@ -49,7 +49,6 @@ namespace Digi.AdvancedWelding
 
         readonly List<MergeGrids> ScheduledMerge = new List<MergeGrids>();
         readonly List<MergedPair> AlreadyMerged = new List<MergedPair>();
-        readonly List<IMyCubeGrid> TmpGrids = new List<IMyCubeGrid>();
 
         public MergeHandler(AdvancedWeldingMod main) : base(main)
         {
@@ -208,6 +207,7 @@ namespace Digi.AdvancedWelding
         //    return grid2;
         //}
 
+        //readonly List<IMyCubeGrid> TmpGrids = new List<IMyCubeGrid>();
         //static bool IsRooted(IMyCubeGrid grid)
         //{
         //    if(grid.IsStatic)
