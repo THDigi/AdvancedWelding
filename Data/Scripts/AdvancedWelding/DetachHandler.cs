@@ -328,33 +328,24 @@ namespace Digi.AdvancedWelding
                 return;
 
             MyCubeBlockDefinition blockDef = (MyCubeBlockDefinition)block.BlockDefinition;
-            string blockName = blockDef.DisplayNameText;
 
-            IMyCubeGrid detachFrom = block.CubeGrid;
-            MyCubeGrid detachFromInternal = (MyCubeGrid)detachFrom;
+            // HACK: disconnect block by making it think it has no mountpoints
+            // does not affect other blocks with same definition because of the way Add/RemoveNeighbours() works, this does mean it could no longer work reliably in the future...
+            MyCubeBlockDefinition.MountPoint[] originalMounts = blockDef.MountPoints;
 
-            MyCubeGrid createdGrid = MyCubeGrid.CreateSplit(detachFromInternal, HaxSlimList(detachFromInternal.CubeBlocks, block), true);
-            if(createdGrid == null)
+            try
             {
-                Log.Error($"Failed to create a new grid!");
-                MyVisualScriptLogicProvider.SendChatMessageColored($"Failed to create detached block grid!", Color.Red, Log.ModName, grinder.OwnerIdentityId, MyFontEnum.Debug);
-                return;
+                blockDef.MountPoints = new MyCubeBlockDefinition.MountPoint[0];
+                block.CubeGrid.UpdateBlockNeighbours(block);
+            }
+            finally
+            {
+                blockDef.MountPoints = originalMounts;
             }
 
-            createdGrid.DisplayName = $"(Detached {blockName})";
-
-            Log.Info($"Detached '{blockName}' from '{detachFrom.CustomName}' ({detachFrom.EntityId.ToString()}); new grid id={createdGrid.EntityId.ToString()}");
-
             // sending "to server" so that it happens serverside too if server is a player (or singleplayer).
-            DetachEffectsPacket packet = new DetachEffectsPacket(createdGrid.GetBlocks().First());
+            DetachEffectsPacket packet = new DetachEffectsPacket(block);
             AdvancedWeldingMod.Instance.Networking.SendToServer(packet);
-        }
-
-        static List<T> HaxSlimList<T>(HashSet<T> objTypeRef, IMySlimBlock block)
-        {
-            List<T> list = new List<T>(1);
-            list.Add((T)block);
-            return list;
         }
     }
 }
