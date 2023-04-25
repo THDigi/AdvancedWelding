@@ -100,31 +100,38 @@ namespace Digi.AdvancedWelding
                 if(++merge.WaitedTicks < WaitTicksUntilMerge)
                     continue;
 
-                Matrix matrixForEffects = merge.Pad1LocalMatrix;
-                IMyCubeGrid newGrid = MergeGrids(merge.Pad1, merge.Pad2, true);
-                if(newGrid == null)
-                {
-                    newGrid = MergeGrids(merge.Pad2, merge.Pad1, false);
-                    matrixForEffects = merge.Pad2LocalMatrix;
-                }
-
-                if(newGrid == null)
-                {
-                    Log.Error($"Unable to merge {merge.Pad1} ({merge.Pad1.EntityId.ToString()}) with {merge.Pad2} ({merge.Pad2.EntityId.ToString()})");
-                }
-                else
-                {
-                    Log.Info($"Merged to {newGrid} ({newGrid.EntityId.ToString()})");
-
-                    AlreadyMerged.Add(pair);
-
-                    Vector3 effectLocalPos = matrixForEffects.Translation;
-                    Quaternion effectLocalOrientation = Quaternion.CreateFromRotationMatrix(matrixForEffects);
-                    WeldEffectsPacket packet = new WeldEffectsPacket(newGrid.EntityId, effectLocalPos, effectLocalOrientation);
-                    Main.Networking.SendToServer(packet);
-                }
-
                 ScheduledMerge.RemoveAtFast(i);
+
+                try
+                {
+                    Matrix matrixForEffects = merge.Pad1LocalMatrix;
+                    IMyCubeGrid newGrid = MergeGrids(merge.Pad1, merge.Pad2, true);
+                    if(newGrid == null)
+                    {
+                        newGrid = MergeGrids(merge.Pad2, merge.Pad1, false);
+                        matrixForEffects = merge.Pad2LocalMatrix;
+                    }
+
+                    if(newGrid == null)
+                    {
+                        Log.Error($"Unable to merge {merge.Pad1} ({merge.Pad1.EntityId.ToString()}) with {merge.Pad2} ({merge.Pad2.EntityId.ToString()})");
+                    }
+                    else
+                    {
+                        Log.Info($"Merged to {newGrid} ({newGrid.EntityId.ToString()})");
+
+                        AlreadyMerged.Add(pair);
+
+                        Vector3 effectLocalPos = matrixForEffects.Translation;
+                        Quaternion effectLocalOrientation = Quaternion.CreateFromRotationMatrix(matrixForEffects);
+                        WeldEffectsPacket packet = new WeldEffectsPacket(newGrid.EntityId, effectLocalPos, effectLocalOrientation);
+                        Main.Networking.SendToServer(packet);
+                    }
+                }
+                catch(Exception e)
+                {
+                    Log.Error(e);
+                }
             }
         }
 
