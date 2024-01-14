@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using Digi.Sync;
 using ProtoBuf;
 using Sandbox.Definitions;
@@ -8,11 +7,9 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Weapons;
-using VRage;
 using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.Input;
-using VRage.ObjectBuilders;
 using VRageMath;
 
 namespace Digi.AdvancedWelding
@@ -74,6 +71,8 @@ namespace Digi.AdvancedWelding
     {
         const float GrinderCooldownMs = 250; // from MyAngleGrinder constructor calling base constructor.
 
+        const bool ForceDynamicSplits = false; // if StationVoxelSupport/UnsupportedStations is enabled, this setting forces splits to be dynamic unless embedded in voxels.
+
         // NOTE: if one changes these, edit ChatCommands.HelpText aswell.
         const MyKeys DetachModeKey = MyKeys.Control;
         const MyJoystickButtonsEnum DetachModeButton = MyJoystickButtonsEnum.J05; // left bumper which is a modifier just like ctrl is
@@ -82,6 +81,7 @@ namespace Digi.AdvancedWelding
         DetachProgressPacket ProgressPacket;
         DetachData Local_DetachData;
         Dictionary<ulong, DetachData> Server_DetachData;
+        List<IMySlimBlock> Server_RecentlySplitBlocks;
 
         class DetachData
         {
@@ -103,6 +103,7 @@ namespace Digi.AdvancedWelding
             if(Networking.IsPlayer)
             {
                 Local_DetachData = new DetachData();
+
                 Main.GrinderHandler.GrinderChanged += Local_EquippedGrinderChanged;
                 DetachProgressPacket.OnReceive += Player_DetachProgressPacketReceived;
             }
@@ -110,6 +111,10 @@ namespace Digi.AdvancedWelding
             if(MyAPIGateway.Session.IsServer)
             {
                 Server_DetachData = new Dictionary<ulong, DetachData>();
+
+                if(ForceDynamicSplits)
+                    Server_RecentlySplitBlocks = new List<IMySlimBlock>();
+
                 Main.GrindDamageHandler.GrindingBlock += Server_GrindingBlock;
                 DetachModePacket.OnReceive += Server_DetachModePacketReceived;
                 MyVisualScriptLogicProvider.PlayerDisconnected += Server_PlayerDisconnected;
@@ -139,20 +144,27 @@ namespace Digi.AdvancedWelding
 
         void IUpdatable.Update()
         {
-            if(MyAPIGateway.Utilities.IsDedicated)
-                return;
-
-            IMyAngleGrinder grinder = Main.GrinderHandler.EquippedGrinder;
-            if(grinder == null)
-                return;
-
-            bool shouldDetach = !MyAPIGateway.Gui.IsCursorVisible
-                             && !MyAPIGateway.Gui.ChatEntryVisible
-                             && (MyAPIGateway.Input.IsKeyPress(DetachModeKey) || MyAPIGateway.Input.IsJoystickButtonPressed(DetachModeButton));
-
-            if(shouldDetach != Local_DetachData.DetachMode)
+            if(MyAPIGateway.Session.IsServer)
             {
-                SetLocalDetach(shouldDetach);
+                if(ForceDynamicSplits && Server_RecentlySplitBlocks.Count > 0)
+                    CheckRecentlySplit();
+            }
+
+            // player-side input reading
+            if(Networking.IsPlayer)
+            {
+                IMyAngleGrinder grinder = Main.GrinderHandler.EquippedGrinder;
+                if(grinder != null)
+                {
+                    bool shouldDetach = !MyAPIGateway.Gui.IsCursorVisible
+                                     && !MyAPIGateway.Gui.ChatEntryVisible
+                                     && (MyAPIGateway.Input.IsKeyPress(DetachModeKey) || MyAPIGateway.Input.IsJoystickButtonPressed(DetachModeButton));
+
+                    if(shouldDetach != Local_DetachData.DetachMode)
+                    {
+                        SetLocalDetach(shouldDetach);
+                    }
+                }
             }
         }
 
@@ -337,6 +349,11 @@ namespace Digi.AdvancedWelding
             {
                 blockDef.MountPoints = new MyCubeBlockDefinition.MountPoint[0];
                 block.CubeGrid.UpdateBlockNeighbours(block);
+
+                if(ForceDynamicSplits && block.CubeGrid.IsStatic && MyAPIGateway.Session.SessionSettings.StationVoxelSupport)
+                {
+                    AdvancedWeldingMod.Instance.DetachHandler.Server_RecentlySplitBlocks.Add(block);
+                }
             }
             finally
             {
@@ -346,6 +363,41 @@ namespace Digi.AdvancedWelding
             // sending "to server" so that it happens serverside too if server is a player (or singleplayer).
             DetachEffectsPacket packet = new DetachEffectsPacket(block);
             AdvancedWeldingMod.Instance.Networking.SendToServer(packet);
+        }
+
+        void CheckRecentlySplit()
+        {
+            for(int i = Server_RecentlySplitBlocks.Count - 1; i >= 0; i--)
+            {
+                IMySlimBlock block = Server_RecentlySplitBlocks[i];
+                MyCubeGrid grid = (MyCubeGrid)block.CubeGrid;
+
+                if(grid.BlocksCount != 1) // didn't split yet
+                    continue;
+
+                Server_RecentlySplitBlocks.RemoveAtFast(i);
+
+                if(!block.CubeGrid.IsStatic) // already dynamic, ignoring.
+                    continue;
+
+                bool canBeDynamic = true;
+
+                // from MyCubeGrid.ShouldBeStatic()
+                bool isVolumetric = false; // keen sets this based on: reason != MyTestDynamicReason.ConvertToShip
+                BoundingBoxD bb = grid.PositionComp.WorldAABB;
+
+                // checkForPhysics just checks if grid has physics, so misleading =)
+                if(MyGamePruningStructure.AnyVoxelMapInBox(ref bb)
+                && MyCubeGrid.IsInVoxels(grid.GetCubeBlock(block.Min), checkForPhysics: true, isVolumetric: isVolumetric))
+                {
+                    canBeDynamic = false;
+                }
+
+                if(canBeDynamic)
+                {
+                    block.CubeGrid.IsStatic = false;
+                }
+            }
         }
     }
 }
