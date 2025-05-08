@@ -71,6 +71,7 @@ namespace Digi.AdvancedWelding
     {
         const float GrinderCooldownMs = 250; // from MyAngleGrinder constructor calling base constructor.
 
+        // TODO: server config to enable this for?
         const bool ForceDynamicSplits = false; // if StationVoxelSupport/UnsupportedStations is enabled, this setting forces splits to be dynamic unless embedded in voxels.
 
         // NOTE: if one changes these, edit ChatCommands.HelpText aswell.
@@ -219,7 +220,7 @@ namespace Digi.AdvancedWelding
             switch(packet.State)
             {
                 case DetachState.EnemyBlock:
-                    Main.Notifications.Print(Channel.Detach, "Detach Mode: Cannot detach enemy blocks.", MyFontEnum.Red, 3000);
+                    Main.Notifications.Print(Channel.Detach, "Detach Mode: Cannot detach other faction's blocks.", MyFontEnum.Red, 3000);
                     break;
                 case DetachState.SingleBlock:
                     Main.Notifications.Print(Channel.Detach, "Detach Mode: Nothing to detach from, block is free floating.", MyFontEnum.Debug, 2000);
@@ -279,11 +280,39 @@ namespace Digi.AdvancedWelding
             if(owner != 0)
             {
                 MyRelationsBetweenPlayerAndBlock relation = MyIDModule.GetRelationPlayerBlock(owner, grinder.OwnerIdentityId, MyOwnershipShareModeEnum.Faction);
-                if(relation == MyRelationsBetweenPlayerAndBlock.Enemies)
+
+                /*
+                IMyIdentity identity = null;
+                IMyIdentity grinderIdentity = null;
+                MyAPIGateway.Players.GetAllIdentites(null, (i) =>
+                {
+                    if(i.IdentityId == owner)
+                        identity = i;
+
+                    if(i.IdentityId == grinder.OwnerIdentityId)
+                        grinderIdentity = i;
+
+                    return false;
+                });
+                DebugPrint($"grinder={grinderIdentity?.DisplayName}; block={identity?.DisplayName}; relation={relation}; isFriendly={relation.IsFriendly()}", 250);
+                */
+
+                // same as IsFriendly() but not affected by future changes
+                if(relation == MyRelationsBetweenPlayerAndBlock.NoOwnership
+                || relation == MyRelationsBetweenPlayerAndBlock.Owner
+                || relation == MyRelationsBetweenPlayerAndBlock.FactionShare)
+                {
+                    // allow
+                }
+                else
                 {
                     ProgressPacket.Send(attackerSteamId, DetachState.EnemyBlock);
                     return;
                 }
+            }
+            else
+            {
+                //DebugPrint("No owner!!", 250);
             }
 
             MyCubeGrid grid = (MyCubeGrid)block.CubeGrid;
@@ -333,6 +362,14 @@ namespace Digi.AdvancedWelding
                 ProgressPacket.Send(attackerSteamId, DetachState.Detaching, progress);
             }
         }
+
+        //static void DebugPrint(string msg, int notifyMs)
+        //{
+        //    if(MyAPIGateway.Session.Player != null)
+        //        MyAPIGateway.Utilities.ShowNotification(msg, notifyMs);
+        //
+        //    MyLog.Default.WriteLineAndConsole($"### DEBUG {Log.ModName}: {msg}");
+        //}
 
         static void DetachBlock(IMySlimBlock block, IMyAngleGrinder grinder)
         {
