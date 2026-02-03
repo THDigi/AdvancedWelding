@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Digi.Sync;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using VRage.Game;
@@ -73,7 +72,7 @@ namespace Digi.AdvancedWelding
 
         public bool SeeWeldPadInfo()
         {
-            if(!Networking.IsPlayer)
+            if(!AdvancedWeldingMod.IsPlayer || MyAPIGateway.Session.Player == null)
                 return false;
 
             if(ThisPad.GetPlayerRelationToOwner() == MyRelationsBetweenPlayerAndBlock.Enemies)

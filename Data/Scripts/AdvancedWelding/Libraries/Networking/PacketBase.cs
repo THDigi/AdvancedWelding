@@ -1,29 +1,29 @@
 ﻿using ProtoBuf;
 using Sandbox.ModAPI;
 
-namespace Digi.Sync
+namespace Digi.NetworkLib
 {
-    [ProtoContract]
+    [ProtoContract(UseProtoMembersOnly = true)]
     public abstract partial class PacketBase
     {
         /// <summary>
-        /// Do not edit, assigned automatically.
-        /// The original client sender of this packet.
-        /// This gets validated serverside.
+        /// Automatically assigned to original sender's SteamId, validated when it reaches server.
         /// </summary>
         [ProtoMember(1)]
         public ulong OriginalSenderSteamId;
 
-        public PacketBase() // Empty constructor required for deserialization
+        public PacketBase()
         {
-            OriginalSenderSteamId = MyAPIGateway.Multiplayer.MyId;
+            if(MyAPIGateway.Multiplayer == null)
+                Network.CrashAfterLoad($"Cannot instantiate packets in fields ({GetType().Name}), too early! Do it in one of the methods where MyAPIGateway.Multiplayer is not null.");
+            else
+                OriginalSenderSteamId = MyAPIGateway.Multiplayer.MyId;
         }
 
         /// <summary>
-        /// Called when this packet is received on this machine.
-        /// <para><paramref name="relay"/> = relay this packet instance to other clients when received server-side.</para>
-        /// <para><paramref name="senderSteamId"/> = the packet's sender. NOTE: relayed packets will have the server as the sender!</para>
+        /// Called when this packet is received on this machine.<br />
+        /// <paramref name="packetInfo"/> can be modified serverside to setup automatic relay.
         /// </summary>
-        public abstract void Received(ref RelayMode relay, ulong senderSteamId);
+        public abstract void Received(ref PacketInfo packetInfo, ulong senderSteamId);
     }
 }

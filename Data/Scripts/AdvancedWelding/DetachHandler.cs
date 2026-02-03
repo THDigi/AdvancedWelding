@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Digi.Sync;
+using Digi.NetworkLib;
 using ProtoBuf;
 using Sandbox.Definitions;
 using Sandbox.Game;
@@ -24,7 +24,7 @@ namespace Digi.AdvancedWelding
 
         public DetachModePacket() { } // Empty constructor required for deserialization
 
-        public override void Received(ref RelayMode relay, ulong senderSteamId)
+        public override void Received(ref PacketInfo packetInfo, ulong senderSteamId)
         {
             OnReceive?.Invoke(this);
         }
@@ -43,7 +43,7 @@ namespace Digi.AdvancedWelding
 
         public DetachProgressPacket() { } // Empty constructor required for deserialization
 
-        public override void Received(ref RelayMode relay, ulong senderSteamId)
+        public override void Received(ref PacketInfo packetInfo, ulong senderSteamId)
         {
             OnReceive?.Invoke(this);
         }
@@ -101,7 +101,7 @@ namespace Digi.AdvancedWelding
             ModePacket = new DetachModePacket();
             ProgressPacket = new DetachProgressPacket();
 
-            if(Networking.IsPlayer)
+            if(AdvancedWeldingMod.IsPlayer)
             {
                 Local_DetachData = new DetachData();
 
@@ -152,7 +152,7 @@ namespace Digi.AdvancedWelding
             }
 
             // player-side input reading
-            if(Networking.IsPlayer)
+            if(AdvancedWeldingMod.IsPlayer)
             {
                 IMyAngleGrinder grinder = Main.GrinderHandler.EquippedGrinder;
                 if(grinder != null)

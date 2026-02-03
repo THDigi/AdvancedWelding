@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Digi.Sync;
+using Digi.NetworkLib;
 using Sandbox.ModAPI;
 using VRage.Collections;
 using VRage.Game.Components;
@@ -12,7 +12,7 @@ namespace Digi.AdvancedWelding
     {
         public static AdvancedWeldingMod Instance;
 
-        public Networking Networking = new Networking(9472); // id must be unique because it collides with other mods
+        public Network Networking;
         public GrindDamageHandler GrindDamageHandler;
         public DetachHandler DetachHandler;
         public GrinderHandler GrinderHandler;
@@ -21,6 +21,8 @@ namespace Digi.AdvancedWelding
         public MergeHandler MergeHandler;
         public ChatCommands ChatCommands;
         public Notifications Notifications;
+
+        public static bool IsPlayer;
 
         internal readonly List<ComponentBase> Components = new List<ComponentBase>();
         internal readonly CachingHashSet<IUpdatable> UpdateObjects = new CachingHashSet<IUpdatable>();
@@ -31,17 +33,20 @@ namespace Digi.AdvancedWelding
             Log.ModName = "Advanced Welding";
             Log.AutoClose = false;
 
-            Networking.LogInfo = (msg) => Log.Info(msg, null);
-            Networking.LogError = (err) => Log.Error(err);
-            Networking.LogException = (ex) => Log.Error(ex);
-            Networking.Register(ModContext);
+            bool isDS = MyAPIGateway.Session.IsServer && MyAPIGateway.Utilities.IsDedicated;
+            IsPlayer = !isDS;
+
+            // id must be unique because it collides with other mods
+            Networking = new Network(9472, Log.ModName, registerListener: true);
+            Networking.ErrorHandler = (err) => Log.Error(err);
+            Networking.ExceptionHandler = (ex) => Log.Error(ex);
 
             PrecisionHandler = new PrecisionHandler(this);
             DetachHandler = new DetachHandler(this);
             WeldPadHandler = new WeldPadHandler(this);
             MergeHandler = new MergeHandler(this);
 
-            if(Networking.IsPlayer)
+            if(IsPlayer)
             {
                 GrinderHandler = new GrinderHandler(this);
                 ChatCommands = new ChatCommands(this);
@@ -77,7 +82,7 @@ namespace Digi.AdvancedWelding
         {
             try
             {
-                Networking.Unregister();
+                Networking?.Dispose();
 
                 foreach(ComponentBase comp in Components)
                 {

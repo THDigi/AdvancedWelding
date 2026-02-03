@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Digi.Sync;
+using Digi.NetworkLib;
 using ProtoBuf;
 using Sandbox.Game;
 using Sandbox.Game.EntityComponents;
@@ -29,7 +29,7 @@ namespace Digi.AdvancedWelding
 
         public PrecisionPacket() { } // Empty constructor required for deserialization
 
-        public override void Received(ref RelayMode relay, ulong senderSteamId)
+        public override void Received(ref PacketInfo packetInfo, ulong senderSteamId)
         {
             OnReceive?.Invoke(this);
         }
@@ -61,7 +61,7 @@ namespace Digi.AdvancedWelding
         {
             Packet = new PrecisionPacket();
 
-            if(Networking.IsPlayer)
+            if(AdvancedWeldingMod.IsPlayer)
             {
                 Main.GrinderHandler.GrinderChanged += Local_EquippedGrinderChanged;
             }

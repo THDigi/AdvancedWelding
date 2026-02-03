@@ -1,7 +1,7 @@
 ﻿using Digi.AdvancedWelding;
 using ProtoBuf;
 
-namespace Digi.Sync
+namespace Digi.NetworkLib
 {
     // Must include all packets
     [ProtoInclude(10, typeof(DetachModePacket))]

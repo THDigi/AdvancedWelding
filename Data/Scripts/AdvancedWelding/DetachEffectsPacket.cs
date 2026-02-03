@@ -1,4 +1,4 @@
-﻿using Digi.Sync;
+﻿using Digi.NetworkLib;
 using ProtoBuf;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
@@ -48,11 +48,11 @@ namespace Digi.AdvancedWelding
             BlockDefId = block.BlockDefinition.Id;
         }
 
-        public override void Received(ref RelayMode relay, ulong senderSteamId)
+        public override void Received(ref PacketInfo packetInfo, ulong senderSteamId)
         {
-            relay = RelayMode.RelayOriginal;
+            packetInfo.Relay = RelayMode.ToOthers;
 
-            if(!Networking.IsPlayer)
+            if(!AdvancedWeldingMod.IsPlayer)
                 return;
 
             Vector3D camPos = MyAPIGateway.Session.Camera.WorldMatrix.Translation;

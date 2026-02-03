@@ -1,4 +1,4 @@
-﻿using Digi.Sync;
+﻿using Digi.NetworkLib;
 using ProtoBuf;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -31,11 +31,11 @@ namespace Digi.AdvancedWelding
             LocalOrientation = localOrientation;
         }
 
-        public override void Received(ref RelayMode relay, ulong senderSteamId)
+        public override void Received(ref PacketInfo packetInfo, ulong senderSteamId)
         {
-            relay = RelayMode.RelayOriginal;
+            packetInfo.Relay = RelayMode.ToOthers;
 
-            if(!Networking.IsPlayer)
+            if(!AdvancedWeldingMod.IsPlayer)
                 return;
 
             IMyCubeGrid grid = MyEntities.GetEntityById(GridEntId) as IMyCubeGrid;

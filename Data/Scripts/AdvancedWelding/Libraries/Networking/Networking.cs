@@ -1,64 +1,99 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 
-namespace Digi.Sync
+namespace Digi.NetworkLib
 {
-    public class Networking
+    // yes file name doesn't match, trying to avoid renaming/deleting files because of unreliability in Steam/SE's mod updating
+    public class Network : IDisposable
     {
-        public static bool IsPlayer => !MyAPIGateway.Utilities.IsDedicated;
-
         public readonly ushort ChannelId;
 
-        public Action<string> LogInfo;
-        public Action<Exception> LogException;
-        public Action<string> LogError;
-
-        private IMyModContext Mod;
-        private List<IMyPlayer> TempPlayers = null;
+        /// <summary>
+        /// Callback for errors in the receive packet event.<br />
+        /// If null (default), it will write to SE log, DS console or client HUD (whichever is applicable).<br />
+        /// NOTE: Another mod using the same channelId will cause exceptions that are not either of your faults, not recommended to crash nor to ignore the error, just let players find collisions and work it out with the other author(s).
+        /// </summary>
+        public Action<Exception> ExceptionHandler;
 
         /// <summary>
-        /// <paramref name="channelId"/> must be unique from all other mods that also use network packets.
+        /// Additional callback when exceptions occurs on <see cref="ReceivedPacket(ushort, byte[], ulong, bool)"/> specifically.<br />
+        /// Note that the <see cref="ExceptionHandler"/> is also invoked before this.
+        /// If null (default), it will write to SE log the sender name and steamid, as well as a byte dump of the packet.
         /// </summary>
-        public Networking(ushort channelId)
+        public Action<ulong, IMyPlayer, byte[]> ReceiveExceptionHandler;
+
+        /// <summary>
+        /// Callback for custom text errors.<br />
+        /// If null (default), it will write to SE log, DS console or client HUD (whichever is applicable).
+        /// </summary>
+        public Action<string> ErrorHandler;
+
+        /// <summary>
+        /// To test serialization&deserialization along with messaging API while in singleplayer, set this to true.
+        /// </summary>
+        public bool SerializeTest = false;
+
+        readonly string ModName;
+        readonly List<IMyPlayer> TempPlayers;
+
+        static bool AlreadyInstanced = false;
+
+        /// <summary>
+        /// Create only one instance of this in session component's LoadData() for example (not in fields) and also call <see cref="Dispose"/> in UnloadData().
+        /// </summary>
+        /// <param name="channelId">must be unique from all other mods that also use network packets.</param>
+        /// <param name="modName">an identifier for errors/warnings.</param>
+        /// <param name="registerListener">you can turn off message listening if you don't want this machine to receive them.</param>
+        public Network(ushort channelId, string modName, bool registerListener = true)
         {
             ChannelId = channelId;
+            ModName = modName;
+
+            if(MyAPIGateway.Session == null)
+            {
+                CrashAfterLoad($"{ModName}: The {nameof(Network)} constructor was called too early, earliest valid spot is in LoadData().");
+                return;
+            }
+
+            if(AlreadyInstanced)
+            {
+                CrashAfterLoad($"{ModName}: The {nameof(Network)} was instanced more than once, if you're doing this in gamelogic then don't, do it in session component.");
+                return;
+            }
+
+            AlreadyInstanced = true;
+
+            if(registerListener)
+                MyAPIGateway.Multiplayer.RegisterSecureMessageHandler(ChannelId, ReceivedPacket);
+
+            TempPlayers = new List<IMyPlayer>(MyAPIGateway.Session.SessionSettings.MaxPlayers);
         }
 
         /// <summary>
-        /// Register packet monitoring, not necessary if you don't want the local machine to handle incomming packets.
+        /// This must be called by you on world unload.
         /// </summary>
-        public void Register(IMyModContext mod)
-        {
-            Mod = mod;
-            MyAPIGateway.Multiplayer.RegisterSecureMessageHandler(ChannelId, ReceivedPacket);
-
-            LogInfo = LogInfo ?? MyLog.Default.WriteLine;
-            LogError = LogError ?? DefaultLogError;
-            LogException = LogException ?? DefaultLogException;
-        }
-
-        /// <summary>
-        /// This must be called on world unload if you called <see cref="Register"/>.
-        /// </summary>
-        public void Unregister()
+        public void Dispose()
         {
             MyAPIGateway.Multiplayer.UnregisterSecureMessageHandler(ChannelId, ReceivedPacket);
+
+            TempPlayers.Clear();
         }
 
         /// <summary>
-        /// Send a packet to the server.
-        /// Works from clients and server.
-        /// <para><paramref name="serialized"/> = input pre-serialized data if you have it or leave null otherwise.</para>
+        /// Send a packet to the server.<br />
+        /// Works from clients and server.<br />
+        /// <para><paramref name="serialized"/> = input pre-serialized data if you have it (optimization) or leave null otherwise.</para>
         /// </summary>
         public void SendToServer(PacketBase packet, byte[] serialized = null)
         {
-            if(MyAPIGateway.Multiplayer.IsServer) // short-circuit local call to avoid unnecessary serialization
+            if(!SerializeTest && MyAPIGateway.Multiplayer.IsServer) // short-circuit local call to avoid unnecessary serialization
             {
-                HandlePacket(packet, MyAPIGateway.Multiplayer.MyId);
+                HandlePacket(packet, MyAPIGateway.Multiplayer.MyId, true, serialized);
                 return;
             }
 
@@ -69,14 +104,14 @@ namespace Digi.Sync
         }
 
         /// <summary>
-        /// Send a packet to a specific player.
-        /// Only works server side.
-        /// <para><paramref name="serialized"/> = input pre-serialized data if you have it or leave null otherwise.</para>
+        /// Send a packet to a specific player.<br />
+        /// Only works server side.<br />
+        /// <para><paramref name="serialized"/> = input pre-serialized data if you have it (optimization) or leave null otherwise.</para>
         /// </summary>
         public void SendToPlayer(PacketBase packet, ulong steamId, byte[] serialized = null)
         {
             if(!MyAPIGateway.Multiplayer.IsServer)
-                throw new Exception("Clients can't send packets to other clients directly!");
+                throw new Exception($"{ModName}: Clients can't send packets to other clients directly!");
 
             if(serialized == null)
                 serialized = MyAPIGateway.Utilities.SerializeToBinary(packet);
@@ -85,42 +120,22 @@ namespace Digi.Sync
         }
 
         /// <summary>
-        /// Sends packet to all players except server player and supplied packet's sender.
-        /// Only works server side.
+        /// Sends packet (or supplied bytes) to all players except server player.<br />
+        /// NOTE: This does not ignore packet's sender! Only use this if you've not done the action on the sender themselves.<br />
+        /// Only works server side.<br />
+        /// <para><paramref name="serialized"/> = input pre-serialized data if you have it (optimization) or leave null otherwise.</para>
         /// </summary>
-        public void SendToOthers(PacketBase packet)
+        public void SendToEveryone(PacketBase packet, byte[] serialized = null)
         {
-            if(packet == null)
-                throw new ArgumentNullException("packet");
-
-            RelayToOthers(packet, null);
+            RelayToClients(packet, 0, serialized);
         }
 
-        /// <summary>
-        /// Sends serialized packet bytes to all players except server player and supplied packet's sender.
-        /// Only works server side.
-        /// </summary>
-        public void SendToOthers(byte[] serialized = null)
-        {
-            if(serialized == null)
-                throw new ArgumentNullException("serialized");
-
-            RelayToOthers(null, serialized);
-        }
-
-        void RelayToOthers(PacketBase packet = null, byte[] serialized = null, ulong senderSteamId = 0)
+        void RelayToClients(PacketBase packet, ulong senderSteamId = 0, byte[] serialized = null)
         {
             if(!MyAPIGateway.Multiplayer.IsServer)
-                throw new Exception("Clients can't send directly to other clients! Send to server and use RelayMode to have it broadcasted to everyone else.");
+                throw new Exception($"{ModName}: Clients can't relay packets!");
 
-            if(packet == null && serialized == null)
-                throw new ArgumentException("Both 'packet' and 'serialized' arguments are null, at least one must be given!");
-
-            if(TempPlayers == null)
-                TempPlayers = new List<IMyPlayer>(MyAPIGateway.Session.SessionSettings.MaxPlayers);
-            else
-                TempPlayers.Clear();
-
+            TempPlayers.Clear();
             MyAPIGateway.Players.GetPlayers(TempPlayers);
 
             foreach(IMyPlayer p in TempPlayers)
@@ -132,85 +147,161 @@ namespace Digi.Sync
                 if(serialized == null) // only serialize if necessary, and only once.
                     serialized = MyAPIGateway.Utilities.SerializeToBinary(packet);
 
-                if(!MyAPIGateway.Multiplayer.SendMessageTo(ChannelId, serialized, p.SteamUserId))
-                {
-                    LogError($"Failed to send packet to {p.SteamUserId.ToString()}, game gives no further details, bugreport to author!");
-                }
+                MyAPIGateway.Multiplayer.SendMessageTo(ChannelId, serialized, p.SteamUserId);
             }
 
             TempPlayers.Clear();
         }
 
-        void ReceivedPacket(ushort channelId, byte[] serialized, ulong senderSteamId, bool isSenderServer) // executed when a packet is received on this machine
+        /// <summary>
+        /// Executed when a packet is received on this machine
+        /// </summary>
+        void ReceivedPacket(ushort channelId, byte[] serialized, ulong senderSteamId, bool isSenderServer)
         {
             try
             {
                 PacketBase packet = MyAPIGateway.Utilities.SerializeFromBinary<PacketBase>(serialized);
-                HandlePacket(packet, senderSteamId, serialized);
+                HandlePacket(packet, senderSteamId, isSenderServer, serialized);
             }
             catch(Exception e)
             {
-                LogException(e);
-            }
-        }
-
-        void HandlePacket(PacketBase packet, ulong senderSteamId, byte[] serialized = null)
-        {
-            // validate OriginalSenderSteamId
-            if(MyAPIGateway.Session.IsServer && senderSteamId != packet.OriginalSenderSteamId)
-            {
-                LogError($"{GetType().FullName} WARNING: packet {packet.GetType().Name} from {senderSteamId.ToString()} has altered SenderSteamId to {packet.OriginalSenderSteamId.ToString()}. I replaced it with the proper id, but if this triggers for everyone then it's a bug somewhere.");
-
-                packet.OriginalSenderSteamId = senderSteamId;
-                serialized = null; // force reserialize
-            }
-
-            RelayMode relay = RelayMode.NoRelay;
-            packet.Received(ref relay, senderSteamId);
-
-            if(MyAPIGateway.Session.IsServer && relay != RelayMode.NoRelay)
-            {
-                if(relay == RelayMode.RelayOriginal)
-                    RelayToOthers(packet, serialized, senderSteamId);
-                else if(relay == RelayMode.RelayWithChanges)
-                    RelayToOthers(packet, null, senderSteamId);
+                if(ExceptionHandler != null)
+                {
+                    ExceptionHandler.Invoke(e);
+                }
                 else
-                    throw new Exception($"Unknown relay mode: {relay.ToString()}");
+                {
+                    DefaultExceptionHandler(e);
+                }
+
+                TempPlayers.Clear();
+                MyAPIGateway.Players.GetPlayers(TempPlayers, (p) => p.SteamUserId == senderSteamId); // callback not ideal for speed but this is an error so whatever
+                IMyPlayer sender = TempPlayers.FirstOrDefault();
+                TempPlayers.Clear();
+
+                if(ReceiveExceptionHandler != null)
+                {
+                    ReceiveExceptionHandler.Invoke(senderSteamId, sender, serialized);
+                }
+                else
+                {
+                    MyLog.Default.WriteLineAndConsole($"{ModName} ReceivedPacket error additional info: sender={sender?.DisplayName ?? "<unknown>"} ({senderSteamId}); bytes={string.Join(",", serialized)}");
+                }
             }
         }
 
-        void DefaultLogError(string error)
+        void HandlePacket(PacketBase packet, ulong senderSteamId, bool isSenderServer, byte[] serialized = null)
         {
-            MyLog.Default.WriteLineAndConsole($"{Mod.ModName} ERROR: {error}");
+            // Server-side OriginalSenderSteamId validation
+            // skipping if sender is server because it always has ID 0 but its MyId is not 0 resulting in the error always triggering.
+            if(MyAPIGateway.Multiplayer.IsServer && !isSenderServer)
+            {
+                if(senderSteamId != packet.OriginalSenderSteamId)
+                {
+                    string text = $"WARNING: packet {packet.GetType().Name} from {senderSteamId.ToString()} has altered OriginalSenderSteamId to {packet.OriginalSenderSteamId.ToString()}. Replaced it with proper id, but if this triggers for everyone then it's a bug somewhere.";
+                    if(ErrorHandler != null)
+                        ErrorHandler.Invoke(text);
+                    else
+                        DefaultErrorHandler(text);
 
-            if(MyAPIGateway.Session?.Player != null)
-                MyAPIGateway.Utilities.ShowNotification($"[ERROR: {Mod.ModName}: {error} | Send SpaceEngineers.Log to mod author]", 10000, MyFontEnum.Red);
+                    packet.OriginalSenderSteamId = senderSteamId;
+                    serialized = null; // force reserialize
+                }
+            }
+
+            PacketInfo packetInfo = new PacketInfo()
+            {
+                Relay = RelayMode.None,
+                Reserialize = false,
+            };
+
+            packet.Received(ref packetInfo, senderSteamId);
+
+            if(MyAPIGateway.Multiplayer.IsServer)
+            {
+                if(packetInfo.Reserialize)
+                {
+                    serialized = null;
+                }
+
+                switch(packetInfo.Relay)
+                {
+                    case RelayMode.None: break;
+                    case RelayMode.ToOthers: RelayToClients(packet, senderSteamId, serialized); break;
+                    case RelayMode.ToEveryone: RelayToClients(packet, 0, serialized); break;
+                    default: throw new Exception($"{ModName}: Unknown relay mode: {packetInfo.Relay.ToString()}");
+                }
+            }
         }
 
-        void DefaultLogException(Exception e)
+        void DefaultExceptionHandler(Exception e)
         {
-            MyLog.Default.WriteLineAndConsole($"{Mod.ModName} ERROR: {e.Message}\n{e.StackTrace}");
+            MyLog.Default.WriteLineAndConsole($"{ModName} ERROR: {e}");
 
             if(MyAPIGateway.Session?.Player != null)
-                MyAPIGateway.Utilities.ShowNotification($"[ERROR: {Mod.ModName}: {e.Message} | Send SpaceEngineers.Log to mod author]", 10000, MyFontEnum.Red);
+                MyAPIGateway.Utilities.ShowNotification($"[ERROR: {ModName}: {e.Message} | Send SpaceEngineers.Log to mod author]", 10000, MyFontEnum.Red);
         }
+
+        void DefaultErrorHandler(string error)
+        {
+            MyLog.Default.WriteLineAndConsole($"{ModName} ERROR: {error}");
+
+            if(MyAPIGateway.Session?.Player != null)
+                MyAPIGateway.Utilities.ShowNotification($"[ERROR: {ModName}: {error} | Send SpaceEngineers.Log to mod author]", 10000, MyFontEnum.Red);
+        }
+
+        /// <summary>
+        /// Calling this will schedule a crash with the given text.<para />
+        /// If you throw an exception during loading it will instead kick player to main menu,<br />
+        ///   that causes all sorts of problems because mods were not being told that world unloaded,<br />
+        ///   leaving them with events hooked which will still work in future world loads even if no mods are present.
+        /// </summary>
+        public static void CrashAfterLoad(string text)
+        {
+            MyAPIGateway.Utilities = MyAPIUtilities.Static; // ensure this is assigned
+            MyAPIGateway.Utilities.InvokeOnGameThread(() =>
+            {
+                throw new Exception(text);
+            });
+        }
+    }
+
+    public delegate void ReceiveDelegate<T>(T packet, ref PacketInfo packetInfo, ulong senderSteamId);
+
+    public struct PacketInfo
+    {
+        /// <summary>
+        /// Set whether this packet should be sent to other clients or not, when it reaches server.<br />
+        /// Defaults to not relaying.<br />
+        /// Has no effect when set on client receivers so it does not need any server checks.
+        /// </summary>
+        public RelayMode Relay;
+
+        /// <summary>
+        /// Set to true if you modified the packet and it needs re-serialization before relaying to clients.<br />
+        /// Has no effect when set on client receivers so it does not need any server checks.<br />
+        /// NOTE: this being false does not guarantee it won't be re-serialized, this is merely a flag that you should set if you modify the packet.
+        /// </summary>
+        public bool Reserialize;
     }
 
     public enum RelayMode
     {
         /// <summary>
-        /// Does not get sent to other clients.
+        /// No automatic sending to other clients.
         /// </summary>
-        NoRelay = 0,
+        None = 0,
 
         /// <summary>
-        /// Broadcast the received bytes to all clients except sender.
+        /// Automatically sends this packet to other clients except sender.<br />
+        /// If server is also a player this does not send to them twice.
         /// </summary>
-        RelayOriginal,
+        ToOthers,
 
         /// <summary>
-        /// Re-serialize the packet (to apply changes) and broadcast to all clients except sender.
+        /// Automatically sends this packet to all MP clients including sender.<br />
+        /// If server is also a player this does not send to them twice.
         /// </summary>
-        RelayWithChanges,
+        ToEveryone,
     }
 }
