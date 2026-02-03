@@ -72,10 +72,9 @@ namespace Digi.AdvancedWelding
 
         public bool SeeWeldPadInfo()
         {
-            if(!AdvancedWeldingMod.IsPlayer || MyAPIGateway.Session.Player == null)
-                return false;
-
-            if(ThisPad.GetPlayerRelationToOwner() == MyRelationsBetweenPlayerAndBlock.Enemies)
+            if(!AdvancedWeldingMod.IsPlayer
+            || MyAPIGateway.Session.Player == null
+            || ThisPad.GetUserRelationToOwner(MyAPIGateway.Session.Player.IdentityId) == MyRelationsBetweenPlayerAndBlock.Enemies)
                 return false;
 
             // doesn't quite work for ship with LG carrying a weldpad'd block
