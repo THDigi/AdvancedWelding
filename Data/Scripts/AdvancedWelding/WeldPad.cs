@@ -129,6 +129,16 @@ namespace Digi.AdvancedWelding
             }
         }
 
+        string LastLogged;
+        void LogStatusNoRepeat(string message)
+        {
+            if(LastLogged != message)
+            {
+                LastLogged = message;
+                Log.Info(message);
+            }
+        }
+
         public override void UpdateAfterSimulation10()
         {
             try
@@ -263,11 +273,11 @@ namespace Digi.AdvancedWelding
 
                     if(!MyAPIGateway.Multiplayer.IsServer)
                     {
-                        Log.Info("Merge checks out clientside, waiting for server...");
+                        LogStatusNoRepeat("Merge checks out clientside, waiting for server...");
                     }
                     else
                     {
-                        Log.Info($"Queued for merge {padGrid} and {otherGrid}");
+                        LogStatusNoRepeat($"Queued for merge {padGrid} and {otherGrid}");
 
                         AdvancedWeldingMod.Instance.MergeHandler.ScheduleMerge(ThisPad, OtherPad);
 
@@ -278,7 +288,7 @@ namespace Digi.AdvancedWelding
                         foreach(IMySlimBlock block in DeleteWeldPads)
                         {
                             block.CubeGrid.RemoveBlock(block);
-                            Log.Info($"   removed weldpad that was in the way at {block.Position.ToString()} on {block.CubeGrid.ToString()}");
+                            LogStatusNoRepeat($"   removed weldpad that was in the way at {block.Position.ToString()} on {block.CubeGrid.ToString()}");
                         }
                     }
 
