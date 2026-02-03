@@ -5,7 +5,7 @@
       <Id Type="MyObjectBuilder_BlockVariantGroup" Subtype="WeldPads" />
       <Icon>Textures\Icons\WeldPad.dds</Icon>
       <DisplayName>Weld Pads</DisplayName>
-      <Description>Single-use slim pads that can merge 2 grids without extra space required.</Description>
+      <Description>Single-use slim pads that can merge two grids without extra space required.</Description>
       <Blocks>
         <Block Type="MyObjectBuilder_TerminalBlock" Subtype="LargeWeldPad" />
         <Block Type="MyObjectBuilder_TerminalBlock" Subtype="SmallWeldPad" />

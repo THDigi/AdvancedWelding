@@ -4,8 +4,8 @@
     <BlockPosition>
       <Name>WeldPad</Name>
       <Position>
-        <X>-1</X>
-        <Y>15</Y>
+        <X>2</X>
+        <Y>26</Y><!-- row -->
       </Position>
     </BlockPosition>
   </BlockPositions>
@@ -18,7 +18,7 @@
       <BlockPairName>WeldPad</BlockPairName>
       <DisplayName>Weld Pad</DisplayName>
       <Icon>Textures\Icons\WeldPad.dds</Icon>
-      <Description>Single-use slim pads that can merge 2 grids without extra space required.</Description>
+      <Description>Single-use slim pads that can merge two grids without extra space required.</Description>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
@@ -54,7 +54,7 @@
       <BlockPairName>WeldPad</BlockPairName>
       <DisplayName>Weld Pad</DisplayName>
       <Icon>Textures\Icons\WeldPad.dds</Icon>
-      <Description>Single-use slim pads that can merge 2 grids without extra space required.</Description>
+      <Description>Single-use slim pads that can merge two grids without extra space required.</Description>
       <CubeSize>Large</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
