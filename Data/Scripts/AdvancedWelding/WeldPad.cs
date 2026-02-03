@@ -235,6 +235,14 @@ namespace Digi.AdvancedWelding
                 double distReq = (padGrid.GridSizeEnum == MyCubeSize.Large ? 0.5 : 0.25);
                 double dist = Math.Sqrt(distanceSquared) - distReq;
 
+                // just like mergeblocks do it, this does make the message a bit misleading though...
+                if(ThisPad.CubeGrid.IsNpcSpawnedGrid != OtherPad.CubeGrid.IsNpcSpawnedGrid)
+                {
+                    SetPadStatus("WeldPad: Cannot merge player-owned with NPC-owned grids!", MyFontEnum.Red, 1000);
+                    LogStatusNoRepeat($"Grids IsNpcSpawnedGrid differs: '{ThisPad.CubeGrid.DisplayName}' NPC:{ThisPad.CubeGrid.IsNpcSpawnedGrid} vs '{OtherPad.CubeGrid.DisplayName}' NPC:{OtherPad.CubeGrid.IsNpcSpawnedGrid}");
+                    return;
+                }
+
                 if(dist <= 0 && axisDot == -1.0 && rollDot == 1.0)
                 {
                     if(!CanMergeCubes(ThisPad, OtherPad, MergeHandler.CalculateOffset(ThisPad, OtherPad), BlocksInTheWay, DeleteWeldPads))
