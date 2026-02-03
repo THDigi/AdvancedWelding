@@ -7,7 +7,7 @@ using VRage.Game.Components;
 
 namespace Digi.AdvancedWelding
 {
-    [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
+    [MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
     public class AdvancedWeldingMod : MySessionComponentBase
     {
         public static AdvancedWeldingMod Instance;
@@ -100,7 +100,7 @@ namespace Digi.AdvancedWelding
             Log.Close();
         }
 
-        public override void UpdateAfterSimulation()
+        public override void UpdateBeforeSimulation()
         {
             try
             {
