@@ -4,6 +4,7 @@ using Digi.NetworkLib;
 using Sandbox.ModAPI;
 using VRage.Collections;
 using VRage.Game.Components;
+using VRage.Utils;
 
 namespace Digi.AdvancedWelding
 {
@@ -30,8 +31,10 @@ namespace Digi.AdvancedWelding
         public override void LoadData()
         {
             Instance = this;
-            Log.ModName = "Advanced Welding";
+            Log.ModName = "Advanced Welding v1.1";
             Log.AutoClose = false;
+            Log.Info(Log.ModName);
+            MyLog.Default.WriteLineAndConsole($"### Initializing {Log.ModName}");
 
             bool isDS = MyAPIGateway.Session.IsServer && MyAPIGateway.Utilities.IsDedicated;
             IsPlayer = !isDS;
