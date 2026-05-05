@@ -31,7 +31,7 @@ namespace Digi.AdvancedWelding
         public override void LoadData()
         {
             Instance = this;
-            Log.ModName = "Advanced Welding v1.1";
+            Log.ModName = "Advanced Welding v1.2";
             Log.AutoClose = false;
             Log.Info(Log.ModName);
             MyLog.Default.WriteLineAndConsole($"### Initializing {Log.ModName}");
