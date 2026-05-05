@@ -158,10 +158,9 @@ namespace Digi.AdvancedWelding
                 {
                     IAltControllableEntity ctrlEnt = (IAltControllableEntity)MyAPIGateway.Session.ControlledObject;
                     IMyControllerControl control = MyAPIGateway.Input.GetControl(ctrlEnt.ControlContext, ControlForAction);
-                    IMyControllerControl controlAux = MyAPIGateway.Input.GetControl(ctrlEnt.AuxiliaryContext, ControlForAction);
 
-                    heldPressed = (control?.IsPressed() ?? false) || (controlAux?.IsPressed() ?? false);
-                    newReleased = (control?.IsNewReleased() ?? false) || (controlAux?.IsNewReleased() ?? false);
+                    heldPressed = (control?.IsPressed() ?? false);
+                    newReleased = (control?.IsNewReleased() ?? false);
                 }
                 else
                 {
